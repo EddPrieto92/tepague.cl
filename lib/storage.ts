@@ -2,6 +2,7 @@
 
 import { calculateBillTotal } from "./calculations";
 import { demoBill } from "./mock-data";
+import type { ParsedReceipt } from "./receipt-ocr";
 import type { Bill, BillItem, Participant, ParticipantItem } from "./types";
 
 const BILL_KEY = "mesa-cobrada:bills";
@@ -34,6 +35,7 @@ export function makeEmptyBill(): Bill {
     serviceFee: 0,
     discount: 0,
     total: 0,
+    includeTipInTotal: true,
     status: "draft",
     participants: [],
     createdAt: now,
@@ -63,16 +65,21 @@ export function saveBills(bills: Bill[]) {
 
 export function upsertBill(bill: Bill) {
   const bills = getBills();
-  const subtotal = bill.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const itemSubtotal = bill.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const subtotal = bill.subtotal || itemSubtotal;
+  const includeTipInTotal = bill.includeTipInTotal !== false;
+  const calculatedTotal = calculateBillTotal({
+    subtotal,
+    tip: bill.tip,
+    serviceFee: bill.serviceFee,
+    discount: bill.discount,
+    includeTip: includeTipInTotal,
+  });
   const nextBill: Bill = {
     ...bill,
-    subtotal: bill.subtotal || subtotal,
-    total: calculateBillTotal({
-      subtotal: bill.subtotal || subtotal,
-      tip: bill.tip,
-      serviceFee: bill.serviceFee,
-      discount: bill.discount,
-    }),
+    subtotal,
+    includeTipInTotal,
+    total: calculatedTotal || bill.total,
     shareId: bill.shareId || slugify(bill.title) || uid("mesa"),
     updatedAt: new Date().toISOString(),
   };
@@ -86,27 +93,41 @@ export function getBillByShareId(shareId: string) {
   return getBills().find((bill) => bill.shareId === shareId);
 }
 
-export function createBillFromTitle(title: string, imageUrl?: string) {
+export function createBillFromTitle(
+  title: string,
+  imageUrl?: string,
+  parsedItems: Omit<BillItem, "id" | "billId">[] = [],
+  parsedReceipt?: Pick<ParsedReceipt, "subtotal" | "tip" | "total">,
+) {
   const bill = makeEmptyBill();
-  const seededItems: BillItem[] = [
-    { id: uid("item"), billId: bill.id, name: "Producto 1", quantity: 1, unitPrice: 8000, totalPrice: 8000, isShared: false },
-    { id: uid("item"), billId: bill.id, name: "Producto compartido", quantity: 1, unitPrice: 12000, totalPrice: 12000, isShared: true },
-  ];
+  const seededItems: BillItem[] =
+    parsedItems.length > 0
+      ? parsedItems.map((item) => ({ ...item, id: uid("item"), billId: bill.id }))
+      : [
+          { id: uid("item"), billId: bill.id, name: "Producto 1", quantity: 1, unitPrice: 8000, totalPrice: 8000, isShared: false },
+          { id: uid("item"), billId: bill.id, name: "Producto compartido", quantity: 1, unitPrice: 12000, totalPrice: 12000, isShared: true },
+        ];
+  const itemSubtotal = seededItems.reduce((sum, item) => sum + item.totalPrice, 0);
+  const subtotal = parsedReceipt?.subtotal || itemSubtotal;
+  const tip = parsedReceipt ? parsedReceipt.tip : Math.round(subtotal * 0.1);
+  const includeTipInTotal = true;
+  const total = calculateBillTotal({ subtotal, tip, serviceFee: 0, discount: 0, includeTip: includeTipInTotal }) || parsedReceipt?.total || 0;
   return upsertBill({
     ...bill,
     title,
     shareId: `${slugify(title) || "mesa"}-${Math.random().toString(36).slice(2, 6)}`,
     imageUrl,
-    subtotal: 20000,
-    tip: 2000,
-    total: 22000,
+    subtotal,
+    tip,
+    total,
+    includeTipInTotal,
     items: seededItems,
   });
 }
 
 export function updateBillItems(bill: Bill, items: BillItem[]) {
   const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-  return upsertBill({ ...bill, items, subtotal });
+  return upsertBill({ ...bill, items, subtotal: bill.subtotal || subtotal });
 }
 
 export function addParticipant(bill: Bill, name: string) {
@@ -115,12 +136,22 @@ export function addParticipant(bill: Bill, name: string) {
     billId: bill.id,
     name,
     totalAmount: 0,
+    includeTip: true,
     status: "selecting",
     items: [],
     adjustments: [],
   };
   rememberParticipant(bill.shareId, participant.id);
   return upsertBill({ ...bill, participants: [...bill.participants, participant] });
+}
+
+export function updateParticipantTipPreference(bill: Bill, participantId: string, includeTip: boolean) {
+  return upsertBill({
+    ...bill,
+    participants: bill.participants.map((participant) =>
+      participant.id === participantId ? { ...participant, includeTip } : participant,
+    ),
+  });
 }
 
 export function updateParticipantItems(bill: Bill, participantId: string, items: ParticipantItem[], confirm = false) {

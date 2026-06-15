@@ -32,6 +32,7 @@ export type Participant = {
   billId: string;
   name: string;
   totalAmount: number;
+  includeTip?: boolean;
   status: ParticipantStatus;
   paidAt?: string;
   items: ParticipantItem[];
@@ -48,6 +49,7 @@ export type Bill = {
   serviceFee: number;
   discount: number;
   total: number;
+  includeTipInTotal?: boolean;
   status: BillStatus;
   paymentMethod: PaymentMethod;
   paymentLink?: string;

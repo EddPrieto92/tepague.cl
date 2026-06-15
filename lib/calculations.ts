@@ -19,8 +19,9 @@ export function calculateBillTotal(input: {
   tip: number;
   serviceFee: number;
   discount: number;
+  includeTip?: boolean;
 }) {
-  return Math.max(0, input.subtotal + input.tip + input.serviceFee - input.discount);
+  return Math.max(0, input.subtotal + (input.includeTip === false ? 0 : input.tip) + input.serviceFee - input.discount);
 }
 
 export function calculateSharedItemSplit(item: BillItem, participantCount: number) {
@@ -59,7 +60,11 @@ export function calculateParticipantTotals(bill: Bill) {
 
   return bill.participants.map((participant) => ({
     ...participant,
-    totalAmount: calculateParticipantFinalAmount(bill, participant.items, sharedClaims),
+    totalAmount: calculateParticipantFinalAmount(
+      { ...bill, tip: participant.includeTip === false ? 0 : bill.tip },
+      participant.items,
+      sharedClaims,
+    ),
   }));
 }
 

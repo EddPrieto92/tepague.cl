@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Bill, ParticipantItem } from "@/lib/types";
 import { calculateParticipantFinalAmount, formatCLP } from "@/lib/calculations";
-import { makeParticipantItem, updateParticipantItems } from "@/lib/storage";
+import { makeParticipantItem, updateParticipantItems, updateParticipantTipPreference } from "@/lib/storage";
 import { Button, Card, SecondaryButton } from "./ui";
 import { QuantitySelector } from "./QuantitySelector";
 import { SharedItemToggle } from "./SharedItemToggle";
@@ -33,7 +33,11 @@ export function ItemClaimList({ bill, participantId }: Props) {
     [currentBill],
   );
 
-  const total = calculateParticipantFinalAmount(currentBill, items, sharedCounts);
+  const total = calculateParticipantFinalAmount(
+    { ...currentBill, tip: participant?.includeTip === false ? 0 : currentBill.tip },
+    items,
+    sharedCounts,
+  );
 
   function setItem(itemId: string, quantity: number) {
     const item = currentBill.items.find((candidate) => candidate.id === itemId);
@@ -96,6 +100,19 @@ export function ItemClaimList({ bill, participantId }: Props) {
           </Card>
         );
       })}
+
+      <Card className="flex items-center justify-between gap-3">
+        <label className="flex items-center gap-3 text-sm font-black">
+          <input
+            checked={participant.includeTip !== false}
+            className="size-5 accent-ink"
+            type="checkbox"
+            onChange={(event) => setCurrentBill(updateParticipantTipPreference(currentBill, participantId, event.target.checked))}
+          />
+          Incluir propina
+        </label>
+        <span className="text-sm font-black">{formatCLP(currentBill.tip)}</span>
+      </Card>
 
       <div className="grid gap-3">
         <Button disabled={items.length === 0} onClick={confirm} type="button">
