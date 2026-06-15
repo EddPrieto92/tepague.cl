@@ -1,0 +1,164 @@
+"use client";
+
+import { calculateBillTotal } from "./calculations";
+import { demoBill } from "./mock-data";
+import type { Bill, BillItem, Participant, ParticipantItem } from "./types";
+
+const BILL_KEY = "mesa-cobrada:bills";
+const PARTICIPANT_KEY = "mesa-cobrada:participant";
+
+function uid(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 32);
+}
+
+export function makeEmptyBill(): Bill {
+  const now = new Date().toISOString();
+  return {
+    ...demoBill,
+    id: uid("bill"),
+    shareId: `mesa-${Math.random().toString(36).slice(2, 8)}`,
+    title: "",
+    imageUrl: "",
+    subtotal: 0,
+    tip: 0,
+    serviceFee: 0,
+    discount: 0,
+    total: 0,
+    status: "draft",
+    participants: [],
+    createdAt: now,
+    updatedAt: now,
+    items: [],
+  };
+}
+
+export function getBills(): Bill[] {
+  if (typeof window === "undefined") return [demoBill];
+  const raw = window.localStorage.getItem(BILL_KEY);
+  if (!raw) {
+    window.localStorage.setItem(BILL_KEY, JSON.stringify([demoBill]));
+    return [demoBill];
+  }
+  try {
+    return JSON.parse(raw) as Bill[];
+  } catch {
+    window.localStorage.setItem(BILL_KEY, JSON.stringify([demoBill]));
+    return [demoBill];
+  }
+}
+
+export function saveBills(bills: Bill[]) {
+  window.localStorage.setItem(BILL_KEY, JSON.stringify(bills));
+}
+
+export function upsertBill(bill: Bill) {
+  const bills = getBills();
+  const subtotal = bill.items.reduce((sum, item) => sum + item.totalPrice, 0);
+  const nextBill: Bill = {
+    ...bill,
+    subtotal: bill.subtotal || subtotal,
+    total: calculateBillTotal({
+      subtotal: bill.subtotal || subtotal,
+      tip: bill.tip,
+      serviceFee: bill.serviceFee,
+      discount: bill.discount,
+    }),
+    shareId: bill.shareId || slugify(bill.title) || uid("mesa"),
+    updatedAt: new Date().toISOString(),
+  };
+  const index = bills.findIndex((candidate) => candidate.id === nextBill.id);
+  const nextBills = index >= 0 ? bills.with(index, nextBill) : [nextBill, ...bills];
+  saveBills(nextBills);
+  return nextBill;
+}
+
+export function getBillByShareId(shareId: string) {
+  return getBills().find((bill) => bill.shareId === shareId);
+}
+
+export function createBillFromTitle(title: string, imageUrl?: string) {
+  const bill = makeEmptyBill();
+  const seededItems: BillItem[] = [
+    { id: uid("item"), billId: bill.id, name: "Producto 1", quantity: 1, unitPrice: 8000, totalPrice: 8000, isShared: false },
+    { id: uid("item"), billId: bill.id, name: "Producto compartido", quantity: 1, unitPrice: 12000, totalPrice: 12000, isShared: true },
+  ];
+  return upsertBill({
+    ...bill,
+    title,
+    shareId: `${slugify(title) || "mesa"}-${Math.random().toString(36).slice(2, 6)}`,
+    imageUrl,
+    subtotal: 20000,
+    tip: 2000,
+    total: 22000,
+    items: seededItems,
+  });
+}
+
+export function updateBillItems(bill: Bill, items: BillItem[]) {
+  const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+  return upsertBill({ ...bill, items, subtotal });
+}
+
+export function addParticipant(bill: Bill, name: string) {
+  const participant: Participant = {
+    id: uid("participant"),
+    billId: bill.id,
+    name,
+    totalAmount: 0,
+    status: "selecting",
+    items: [],
+    adjustments: [],
+  };
+  rememberParticipant(bill.shareId, participant.id);
+  return upsertBill({ ...bill, participants: [...bill.participants, participant] });
+}
+
+export function updateParticipantItems(bill: Bill, participantId: string, items: ParticipantItem[], confirm = false) {
+  return upsertBill({
+    ...bill,
+    participants: bill.participants.map((participant) =>
+      participant.id === participantId
+        ? { ...participant, status: confirm ? "confirmed" : participant.status, items }
+        : participant,
+    ),
+  });
+}
+
+export function markParticipantPaid(bill: Bill, participantId: string) {
+  return upsertBill({
+    ...bill,
+    participants: bill.participants.map((participant) =>
+      participant.id === participantId
+        ? { ...participant, status: "paid", paidAt: new Date().toISOString() }
+        : participant,
+    ),
+  });
+}
+
+export function rememberParticipant(shareId: string, participantId: string) {
+  window.localStorage.setItem(`${PARTICIPANT_KEY}:${shareId}`, participantId);
+}
+
+export function getRememberedParticipant(shareId: string) {
+  return window.localStorage.getItem(`${PARTICIPANT_KEY}:${shareId}`);
+}
+
+export function makeParticipantItem(participantId: string, billItemId: string, quantity: number, amount: number): ParticipantItem {
+  return {
+    id: uid("participant_item"),
+    participantId,
+    billItemId,
+    quantity,
+    amount,
+  };
+}
