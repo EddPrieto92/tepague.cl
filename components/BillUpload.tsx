@@ -1,14 +1,16 @@
 "use client";
 
-import { AlertCircle, Camera, ReceiptText, ScanLine } from "lucide-react";
+import { AlertCircle, Camera, ImagePlus, ReceiptText, ScanLine } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { Button, Card, Input, Label } from "./ui";
 import { createBillFromTitle } from "@/lib/storage";
 import { prepareReceiptImage, recognizeReceiptImage, type OcrProgress, type ParsedReceipt } from "@/lib/receipt-ocr";
 
 export function BillUpload() {
   const router = useRouter();
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("Mesa viernes");
   const [imageName, setImageName] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
@@ -44,6 +46,12 @@ export function BillUpload() {
     }
   }
 
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void scanFile(file);
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
     try {
@@ -73,27 +81,51 @@ export function BillUpload() {
 
         <div className="mt-4">
           <Label>Foto boleta</Label>
-          <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-ink bg-paper px-4 text-center">
+          <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border-2 border-dashed border-ink bg-paper px-4 py-5 text-center">
             {previewUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img className="mb-3 max-h-44 w-full rounded-md object-contain" src={previewUrl} alt="Boleta cargada" />
             ) : (
               <Camera size={24} />
             )}
-            <span className="mt-2 text-sm font-bold">{imageName || "Tomar foto o cargar imagen"}</span>
+            <span className="mt-2 text-sm font-bold">{imageName || "Agrega una foto de la boleta"}</span>
             <span className="mt-1 text-xs font-bold text-ink/55">La lectura se hace en tu navegador.</span>
+            <div className="mt-4 grid w-full grid-cols-2 gap-2">
+              <button
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border-2 border-ink bg-white px-3 text-sm font-black text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isScanning}
+                type="button"
+                onClick={() => galleryInputRef.current?.click()}
+              >
+                <ImagePlus size={18} /> Cargar
+              </button>
+              <button
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border-2 border-ink bg-limewash px-3 text-sm font-black text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isScanning}
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+              >
+                <Camera size={18} /> Cámara
+              </button>
+            </div>
             <input
               className="sr-only"
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              disabled={isScanning}
+              onChange={handleFileChange}
+            />
+            <input
+              className="sr-only"
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
               disabled={isScanning}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void scanFile(file);
-              }}
+              onChange={handleFileChange}
             />
-          </label>
+          </div>
         </div>
 
         {isScanning && ocrProgress ? (
