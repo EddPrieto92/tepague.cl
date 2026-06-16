@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { calculatePaymentSummary } from "@/lib/calculations";
 import { createFintocCheckoutSession, FintocApiError } from "@/lib/fintoc";
-import { getServerBill, saveServerPayment, syncBillSnapshot } from "@/lib/server-payment-store";
+import { getServerBill, saveServerPayment, SupabasePaymentStoreError, syncBillSnapshot } from "@/lib/server-payment-store";
 import type { Bill, Payment } from "@/lib/types";
 
 type Payload = {
@@ -86,8 +86,8 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
-    if (error instanceof Error && error.message === "payment_persistence_failed") {
-      return NextResponse.json({ error: "supabase_payment_persistence_failed" }, { status: 500 });
+    if (error instanceof SupabasePaymentStoreError) {
+      return NextResponse.json({ error: "supabase_payment_persistence_failed", detail: error.detail }, { status: 500 });
     }
     return NextResponse.json({ error: "checkout_session_failed" }, { status: 500 });
   }

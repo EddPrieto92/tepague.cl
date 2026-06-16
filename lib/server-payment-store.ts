@@ -1,6 +1,16 @@
 import type { Bill, Payment, PaymentStatus } from "./types";
 import { supabaseAdmin } from "./supabase";
 
+export class SupabasePaymentStoreError extends Error {
+  constructor(
+    message: string,
+    readonly detail: string,
+  ) {
+    super(message);
+    this.name = "SupabasePaymentStoreError";
+  }
+}
+
 type ServerPaymentState = {
   bills: Map<string, Bill>;
   payments: Map<string, Payment>;
@@ -78,7 +88,7 @@ export async function saveServerPayment(payment: Payment) {
     const { error } = await supabaseAdmin.from("payments").upsert(paymentToRow(payment));
     if (error) {
       console.error("Supabase payment upsert failed", { payment_id: payment.id, error });
-      throw new Error("payment_persistence_failed");
+      throw new SupabasePaymentStoreError("payment_persistence_failed", error.message);
     }
   }
 
@@ -95,7 +105,7 @@ export async function getServerPayment(id: string) {
 
     if (error) {
       console.error("Supabase payment lookup failed", { id, error });
-      throw new Error("payment_lookup_failed");
+      throw new SupabasePaymentStoreError("payment_lookup_failed", error.message);
     }
     if (data) return rowToPayment(data as PaymentRow);
   }
@@ -137,7 +147,7 @@ export async function markWebhookProcessed(eventId: string, type = "unknown", ra
     if (error) {
       if (error.code === "23505") return false;
       console.error("Supabase webhook insert failed", { event_id: eventId, error });
-      throw new Error("webhook_persistence_failed");
+      throw new SupabasePaymentStoreError("webhook_persistence_failed", error.message);
     }
   }
 
