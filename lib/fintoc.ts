@@ -44,6 +44,7 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      currency: "CLP",
       success_url: `${appUrl()}/pay/success?payment_id=${input.paymentId}`,
       cancel_url: `${appUrl()}/pay/cancel?payment_id=${input.paymentId}`,
       metadata: {
