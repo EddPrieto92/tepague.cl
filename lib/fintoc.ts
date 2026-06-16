@@ -57,6 +57,7 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
         {
           quantity: 1,
           price_data: {
+            currency: "CLP",
             unit_amount: input.amount,
             product_data: {
               name: input.description,
