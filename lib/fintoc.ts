@@ -14,6 +14,17 @@ export type FintocCheckoutSession = {
   redirect_url: string;
 };
 
+export class FintocApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+    this.name = "FintocApiError";
+  }
+}
+
 function appUrl() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000";
 }
@@ -60,7 +71,7 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
   if (!response.ok) {
     const body = await response.text();
     console.error("Fintoc checkout error", { status: response.status, body });
-    throw new Error("No se pudo crear la sesion de pago Fintoc.");
+    throw new FintocApiError("No se pudo crear la sesion de pago Fintoc.", response.status, body);
   }
 
   const session = (await response.json()) as FintocCheckoutSession;

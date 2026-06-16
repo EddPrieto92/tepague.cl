@@ -40,7 +40,7 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "checkout_failed");
+      if (!response.ok) throw new Error(data.detail ?? data.error ?? "checkout_failed");
       if (data.payment) {
         recordPaymentOnBill(
           {
@@ -52,8 +52,9 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
         );
       }
       window.location.href = data.redirect_url;
-    } catch {
-      setError("No se pudo iniciar el pago. Revisa la cuenta receptora e intenta nuevamente.");
+    } catch (checkoutError) {
+      const message = checkoutError instanceof Error ? checkoutError.message : "";
+      setError(message ? `No se pudo iniciar el pago: ${message}` : "No se pudo iniciar el pago. Revisa la cuenta receptora e intenta nuevamente.");
       setIsPaying(false);
     }
   }

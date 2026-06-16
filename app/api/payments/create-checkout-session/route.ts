@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { calculatePaymentSummary } from "@/lib/calculations";
-import { createFintocCheckoutSession } from "@/lib/fintoc";
+import { createFintocCheckoutSession, FintocApiError } from "@/lib/fintoc";
 import { getServerBill, saveServerPayment, syncBillSnapshot } from "@/lib/server-payment-store";
 import type { Bill, Payment } from "@/lib/types";
 
@@ -76,6 +76,19 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("create-checkout-session failed", error);
+    if (error instanceof FintocApiError) {
+      return NextResponse.json(
+        {
+          error: "fintoc_checkout_error",
+          status: error.status,
+          detail: error.body.slice(0, 600),
+        },
+        { status: 502 },
+      );
+    }
+    if (error instanceof Error && error.message === "payment_persistence_failed") {
+      return NextResponse.json({ error: "supabase_payment_persistence_failed" }, { status: 500 });
+    }
     return NextResponse.json({ error: "checkout_session_failed" }, { status: 500 });
   }
 }
