@@ -1,6 +1,36 @@
 export type BillStatus = "draft" | "open" | "locked" | "closed";
 export type ParticipantStatus = "selecting" | "confirmed" | "paid";
 export type PaymentMethod = "link" | "qr" | "transfer" | "mixed";
+export type PaymentStatus = "created" | "redirected" | "succeeded" | "failed" | "expired" | "requires_action";
+
+export type UserPaymentProfile = {
+  id: string;
+  userId: string;
+  holderName: string;
+  holderId: string;
+  institutionId: string;
+  accountType: string;
+  accountNumber: string;
+  authorized: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Payment = {
+  id: string;
+  billId: string;
+  participantId: string;
+  amount: number;
+  serviceFeeAmount: number;
+  totalAmount: number;
+  status: PaymentStatus;
+  fintocCheckoutSessionId?: string;
+  fintocPaymentIntentId?: string;
+  fintocRedirectUrl?: string;
+  rawWebhookEvent?: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type BillItem = {
   id: string;
@@ -60,6 +90,10 @@ export type Bill = {
   accountNumber?: string;
   receiverIdentifier?: string;
   paymentNote?: string;
+  serviceFeeTotal?: number;
+  serviceFeePerParticipant?: number;
+  paymentProfile?: UserPaymentProfile;
+  payments?: Payment[];
   items: BillItem[];
   participants: Participant[];
   createdAt: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Bill, PaymentMethod } from "@/lib/types";
+import { updatePaymentProfile } from "@/lib/storage";
 import { Card, Input, Label } from "./ui";
 
 type Props = {
@@ -11,6 +12,19 @@ type Props = {
 export function PaymentSetup({ bill, onChange }: Props) {
   function update(patch: Partial<Bill>) {
     onChange({ ...bill, ...patch });
+  }
+
+  const profile = bill.paymentProfile ?? {
+    holderName: bill.receiverName ?? "",
+    holderId: bill.receiverIdentifier ?? "",
+    institutionId: bill.bankName ?? "",
+    accountType: bill.accountType ?? "",
+    accountNumber: bill.accountNumber ?? "",
+    authorized: false,
+  };
+
+  function updateProfile(patch: Partial<typeof profile>) {
+    onChange(updatePaymentProfile(bill, { ...profile, ...patch }));
   }
 
   return (
@@ -29,39 +43,53 @@ export function PaymentSetup({ bill, onChange }: Props) {
         </select>
       </div>
 
-      <div>
-        <Label>Link de pago</Label>
-        <Input value={bill.paymentLink ?? ""} onChange={(event) => update({ paymentLink: event.target.value })} />
-      </div>
+      {bill.paymentMethod === "link" || bill.paymentMethod === "mixed" ? (
+        <div>
+          <Label>Link de pago externo</Label>
+          <Input value={bill.paymentLink ?? ""} onChange={(event) => update({ paymentLink: event.target.value })} />
+        </div>
+      ) : null}
 
-      <div>
-        <Label>QR imagen URL</Label>
-        <Input value={bill.paymentQrUrl ?? ""} onChange={(event) => update({ paymentQrUrl: event.target.value })} />
-      </div>
+      {bill.paymentMethod === "qr" || bill.paymentMethod === "mixed" ? (
+        <div>
+          <Label>QR imagen URL</Label>
+          <Input value={bill.paymentQrUrl ?? ""} onChange={(event) => update({ paymentQrUrl: event.target.value })} />
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label>Nombre</Label>
-          <Input value={bill.receiverName ?? ""} onChange={(event) => update({ receiverName: event.target.value })} />
+          <Label>Nombre titular</Label>
+          <Input value={profile.holderName} onChange={(event) => updateProfile({ holderName: event.target.value })} />
+        </div>
+        <div>
+          <Label>RUT</Label>
+          <Input value={profile.holderId} onChange={(event) => updateProfile({ holderId: event.target.value })} />
         </div>
         <div>
           <Label>Banco</Label>
-          <Input value={bill.bankName ?? ""} onChange={(event) => update({ bankName: event.target.value })} />
+          <Input value={profile.institutionId} onChange={(event) => updateProfile({ institutionId: event.target.value })} />
         </div>
         <div>
           <Label>Tipo cuenta</Label>
-          <Input value={bill.accountType ?? ""} onChange={(event) => update({ accountType: event.target.value })} />
+          <Input value={profile.accountType} onChange={(event) => updateProfile({ accountType: event.target.value })} />
         </div>
-        <div>
+        <div className="col-span-2">
           <Label>Numero</Label>
-          <Input value={bill.accountNumber ?? ""} onChange={(event) => update({ accountNumber: event.target.value })} />
+          <Input value={profile.accountNumber} onChange={(event) => updateProfile({ accountNumber: event.target.value })} />
         </div>
       </div>
 
-      <div>
-        <Label>Identificador</Label>
-        <Input value={bill.receiverIdentifier ?? ""} onChange={(event) => update({ receiverIdentifier: event.target.value })} />
-      </div>
+      <label className="flex items-start gap-3 rounded-lg border-2 border-ink/10 bg-paper p-3 text-sm font-bold">
+        <input
+          checked={profile.authorized}
+          className="mt-1 size-5 accent-ink"
+          type="checkbox"
+          onChange={(event) => updateProfile({ authorized: event.target.checked })}
+        />
+        Declaro ser titular o estar autorizado para recibir fondos en esta cuenta.
+      </label>
+
       <div>
         <Label>Nota</Label>
         <Input value={bill.paymentNote ?? ""} onChange={(event) => update({ paymentNote: event.target.value })} />

@@ -68,6 +68,29 @@ export function calculateParticipantTotals(bill: Bill) {
   }));
 }
 
+export function calculateMesaCobradaServiceFee(participantCount: number) {
+  if (participantCount <= 5) return 0;
+  if (participantCount <= 10) return 990;
+  if (participantCount <= 20) return 1990;
+  return 2990;
+}
+
+export function calculatePaymentSummary(bill: Bill, participantId: string) {
+  const participant = calculateDashboard(bill).participants.find((candidate) => candidate.id === participantId);
+  const payerCount = Math.max(1, bill.participants.filter((candidate) => candidate.status === "confirmed" || candidate.status === "paid").length);
+  const serviceFeeTotal = calculateMesaCobradaServiceFee(bill.participants.length);
+  const serviceFeePerParticipant = Math.round(serviceFeeTotal / payerCount);
+  const amount = Math.round(participant?.totalAmount ?? 0);
+
+  return {
+    participant,
+    amount,
+    serviceFeeTotal,
+    serviceFeePerParticipant,
+    totalAmount: amount + serviceFeePerParticipant,
+  };
+}
+
 export function calculateDashboard(bill: Bill): Dashboard {
   const participants = calculateParticipantTotals(bill).map((participant) => ({
     id: participant.id,

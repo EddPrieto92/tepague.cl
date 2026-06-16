@@ -3,7 +3,7 @@
 import { calculateBillTotal } from "./calculations";
 import { demoBill } from "./mock-data";
 import type { ParsedReceipt } from "./receipt-ocr";
-import type { Bill, BillItem, Participant, ParticipantItem } from "./types";
+import type { Bill, BillItem, Participant, ParticipantItem, Payment, UserPaymentProfile } from "./types";
 
 const BILL_KEY = "mesa-cobrada:bills";
 const PARTICIPANT_KEY = "mesa-cobrada:participant";
@@ -36,6 +36,9 @@ export function makeEmptyBill(): Bill {
     discount: 0,
     total: 0,
     includeTipInTotal: true,
+    serviceFeeTotal: 0,
+    serviceFeePerParticipant: 0,
+    payments: [],
     status: "draft",
     participants: [],
     createdAt: now,
@@ -174,6 +177,39 @@ export function markParticipantPaid(bill: Bill, participantId: string) {
         : participant,
     ),
   });
+}
+
+export function updatePaymentProfile(bill: Bill, profile: Omit<UserPaymentProfile, "id" | "userId" | "createdAt" | "updatedAt">) {
+  const now = new Date().toISOString();
+  const current = bill.paymentProfile;
+  return upsertBill({
+    ...bill,
+    paymentProfile: {
+      ...profile,
+      id: current?.id ?? uid("profile"),
+      userId: current?.userId ?? `organizer:${bill.id}`,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+    },
+    receiverName: profile.holderName,
+    receiverIdentifier: profile.holderId,
+    bankName: profile.institutionId,
+    accountType: profile.accountType,
+    accountNumber: profile.accountNumber,
+  });
+}
+
+export function recordPaymentOnBill(bill: Bill, payment: Payment) {
+  const payments = bill.payments ?? [];
+  const index = payments.findIndex((candidate) => candidate.id === payment.id);
+  const nextPayments = index >= 0 ? payments.with(index, payment) : [payment, ...payments];
+  return upsertBill({ ...bill, payments: nextPayments });
+}
+
+export function applyPaymentStatusLocally(bill: Bill, payment: Payment) {
+  const updatedBill = recordPaymentOnBill(bill, payment);
+  if (payment.status !== "succeeded") return updatedBill;
+  return markParticipantPaid(updatedBill, payment.participantId);
 }
 
 export function rememberParticipant(shareId: string, participantId: string) {
