@@ -15,7 +15,7 @@ create index if not exists user_payment_profiles_user_id_idx
   on public.user_payment_profiles(user_id);
 
 create table if not exists public.payments (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   bill_id text not null,
   participant_id text not null,
   amount integer not null check (amount >= 0),
@@ -48,7 +48,7 @@ create unique index if not exists payments_fintoc_payment_intent_id_idx
 create table if not exists public.fintoc_webhook_events (
   id text primary key,
   type text not null,
-  payment_id uuid references public.payments(id),
+  payment_id text references public.payments(id),
   raw_event jsonb not null,
   processed_at timestamptz not null default now()
 );

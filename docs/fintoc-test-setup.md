@@ -9,6 +9,9 @@ NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
 FINTOC_SECRET_KEY=sk_test_...
 FINTOC_WEBHOOK_SECRET=...
 FINTOC_MOCK_CHECKOUT=false
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 ```
 
 Use Fintoc test keys. Test keys use the `sk_test_` prefix and simulate objects without moving money.
@@ -39,9 +42,11 @@ Handled events:
 
 The endpoint verifies `Fintoc-Signature` when `FINTOC_WEBHOOK_SECRET` is configured.
 
-## Local data note
+## Supabase
 
-The current app still uses `localStorage` for bills. V0.2 adds a temporary server snapshot endpoint before checkout so the backend can calculate the participant amount and create a Checkout Session. The SQL migration in `supabase/migrations` defines the target tables for replacing that temporary store.
+Run the SQL migration in `supabase/migrations/20260616120000_fintoc_payments.sql` before testing real webhooks.
+
+Payments and webhook idempotency are persisted in Supabase when `SUPABASE_SERVICE_ROLE_KEY` is configured. Bills still use `localStorage`, so the frontend sends a minimal bill snapshot before checkout so the backend can calculate the amount.
 
 ## Test flow
 

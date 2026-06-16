@@ -1,4 +1,5 @@
 import type { Bill, Payment, PaymentStatus } from "./types";
+import { supabaseAdmin } from "./supabase";
 
 type ServerPaymentState = {
   bills: Map<string, Bill>;
@@ -30,29 +31,90 @@ export function getServerBill(id: string) {
   return state().bills.get(id) ?? null;
 }
 
-export function saveServerPayment(payment: Payment) {
+function paymentToRow(payment: Payment) {
+  return {
+    id: payment.id,
+    bill_id: payment.billId,
+    participant_id: payment.participantId,
+    amount: payment.amount,
+    service_fee_amount: payment.serviceFeeAmount,
+    total_amount: payment.totalAmount,
+    status: payment.status,
+    fintoc_checkout_session_id: payment.fintocCheckoutSessionId ?? null,
+    fintoc_payment_intent_id: payment.fintocPaymentIntentId ?? null,
+    fintoc_redirect_url: payment.fintocRedirectUrl ?? null,
+    raw_webhook_event: payment.rawWebhookEvent ?? null,
+    created_at: payment.createdAt,
+    updated_at: payment.updatedAt,
+  };
+}
+
+type PaymentRow = ReturnType<typeof paymentToRow>;
+
+function rowToPayment(row: PaymentRow): Payment {
+  return {
+    id: row.id,
+    billId: row.bill_id,
+    participantId: row.participant_id,
+    amount: row.amount,
+    serviceFeeAmount: row.service_fee_amount,
+    totalAmount: row.total_amount,
+    status: row.status as PaymentStatus,
+    fintocCheckoutSessionId: row.fintoc_checkout_session_id ?? undefined,
+    fintocPaymentIntentId: row.fintoc_payment_intent_id ?? undefined,
+    fintocRedirectUrl: row.fintoc_redirect_url ?? undefined,
+    rawWebhookEvent: row.raw_webhook_event ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function saveServerPayment(payment: Payment) {
   state().payments.set(payment.id, payment);
   if (payment.fintocCheckoutSessionId) state().payments.set(payment.fintocCheckoutSessionId, payment);
   if (payment.fintocPaymentIntentId) state().payments.set(payment.fintocPaymentIntentId, payment);
+
+  if (supabaseAdmin) {
+    const { error } = await supabaseAdmin.from("payments").upsert(paymentToRow(payment));
+    if (error) {
+      console.error("Supabase payment upsert failed", { payment_id: payment.id, error });
+      throw new Error("payment_persistence_failed");
+    }
+  }
+
   return payment;
 }
 
-export function getServerPayment(id: string) {
+export async function getServerPayment(id: string) {
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin
+      .from("payments")
+      .select("*")
+      .or(`id.eq.${id},fintoc_checkout_session_id.eq.${id},fintoc_payment_intent_id.eq.${id}`)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Supabase payment lookup failed", { id, error });
+      throw new Error("payment_lookup_failed");
+    }
+    if (data) return rowToPayment(data as PaymentRow);
+  }
+
   return state().payments.get(id) ?? null;
 }
 
-export function findServerPayment(input: { paymentId?: string; checkoutSessionId?: string; paymentIntentId?: string }) {
+export async function findServerPayment(input: { paymentId?: string; checkoutSessionId?: string; paymentIntentId?: string }) {
   return input.paymentId
-    ? getServerPayment(input.paymentId)
+    ? await getServerPayment(input.paymentId)
     : input.paymentIntentId
-      ? getServerPayment(input.paymentIntentId)
+      ? await getServerPayment(input.paymentIntentId)
       : input.checkoutSessionId
-        ? getServerPayment(input.checkoutSessionId)
+        ? await getServerPayment(input.checkoutSessionId)
         : null;
 }
 
-export function updateServerPaymentStatus(payment: Payment, status: PaymentStatus, patch: Partial<Payment> = {}) {
-  return saveServerPayment({
+export async function updateServerPaymentStatus(payment: Payment, status: PaymentStatus, patch: Partial<Payment> = {}) {
+  return await saveServerPayment({
     ...payment,
     ...patch,
     status,
@@ -60,9 +122,24 @@ export function updateServerPaymentStatus(payment: Payment, status: PaymentStatu
   });
 }
 
-export function markWebhookProcessed(eventId: string) {
+export async function markWebhookProcessed(eventId: string, type = "unknown", rawEvent: unknown = {}) {
   const processed = state().processedWebhookEvents;
   if (processed.has(eventId)) return false;
   processed.add(eventId);
+
+  if (supabaseAdmin) {
+    const { error } = await supabaseAdmin.from("fintoc_webhook_events").insert({
+      id: eventId,
+      type,
+      raw_event: rawEvent,
+    });
+
+    if (error) {
+      if (error.code === "23505") return false;
+      console.error("Supabase webhook insert failed", { event_id: eventId, error });
+      throw new Error("webhook_persistence_failed");
+    }
+  }
+
   return true;
 }

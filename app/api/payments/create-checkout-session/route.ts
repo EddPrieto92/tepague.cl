@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       receiverName: bill.paymentProfile.holderName,
     });
 
-    const saved = saveServerPayment({
+    const saved = await saveServerPayment({
       ...payment,
       status: "redirected",
       fintocCheckoutSessionId: session.id,

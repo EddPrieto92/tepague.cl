@@ -37,12 +37,12 @@ export async function POST(request: Request) {
   const event = JSON.parse(rawBody) as FintocEvent;
   console.info("Webhook recibido", { id: event.id, type: event.type });
 
-  if (!markWebhookProcessed(event.id)) {
+  if (!(await markWebhookProcessed(event.id, event.type, event))) {
     return NextResponse.json({ ok: true, idempotent: true });
   }
 
   const paymentIntentId = event.data.payment_resource?.payment_intent?.id;
-  const payment = findServerPayment({
+  const payment = await findServerPayment({
     paymentId: event.data.metadata?.payment_id,
     checkoutSessionId: event.data.id,
     paymentIntentId,
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
   if (!eventStatus) return NextResponse.json({ ok: true, ignored: "event_not_mapped" });
 
-  const nextPayment = updateServerPaymentStatus(payment, eventStatus, {
+  const nextPayment = await updateServerPaymentStatus(payment, eventStatus, {
     fintocPaymentIntentId: paymentIntentId ?? payment.fintocPaymentIntentId,
     rawWebhookEvent: event,
   });
