@@ -4,6 +4,7 @@ import { AlertCircle, Camera, ImagePlus, ReceiptText, ScanLine } from "lucide-re
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { Button, Card, Input, Label } from "./ui";
+import { trackEvent } from "@/lib/analytics";
 import { createBillFromTitle } from "@/lib/storage";
 import { prepareReceiptImage, recognizeReceiptImage, type OcrProgress, type ParsedReceipt } from "@/lib/receipt-ocr";
 
@@ -20,13 +21,19 @@ export function BillUpload() {
   const [error, setError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
 
-  async function scanFile(file: File) {
+  async function scanFile(file: File, source: "camera" | "gallery") {
+    const startedAt = performance.now();
     setError("");
     setParsedReceipt(null);
     setOcrText("");
     setImageName(file.name);
     setIsScanning(true);
     setOcrProgress({ status: "Mejorando foto", progress: 0.08 });
+    trackEvent("receipt_image_selected", {
+      source,
+      file_type: file.type || "unknown",
+      file_size_kb: Math.round(file.size / 1024),
+    });
 
     try {
       const prepared = await prepareReceiptImage(file);
@@ -35,10 +42,22 @@ export function BillUpload() {
       const receipt = await recognizeReceiptImage(prepared.ocrUrl, setOcrProgress);
       setParsedReceipt(receipt);
       setOcrText(receipt.rawText);
+      trackEvent("receipt_ocr_completed", {
+        source,
+        duration_ms: Math.round(performance.now() - startedAt),
+        item_count: receipt.items.length,
+        subtotal_detected: receipt.subtotal > 0,
+        tip_detected: receipt.tip > 0,
+        total_detected: receipt.total > 0,
+      });
       if (receipt.items.length === 0) {
         setError("No encontre productos claros. Puedes crear la mesa igual y cargarlos manualmente.");
       }
     } catch (scanError) {
+      trackEvent("receipt_ocr_failed", {
+        source,
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
       setError(scanError instanceof Error ? scanError.message : "No se pudo escanear la boleta.");
     } finally {
       setIsScanning(false);
@@ -46,16 +65,23 @@ export function BillUpload() {
     }
   }
 
-  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>, source: "camera" | "gallery") {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (file) void scanFile(file);
+    if (file) void scanFile(file, source);
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
     try {
       const bill = createBillFromTitle(title.trim() || "Mesa sin nombre", imageName, parsedReceipt?.items ?? [], parsedReceipt ?? undefined);
+      trackEvent("bill_created", {
+        has_ocr: Boolean(parsedReceipt),
+        item_count: parsedReceipt?.items.length ?? 0,
+        subtotal_detected: Boolean(parsedReceipt?.subtotal),
+        tip_detected: Boolean(parsedReceipt?.tip),
+        total_detected: Boolean(parsedReceipt?.total),
+      });
       window.sessionStorage.setItem("mesa-cobrada:active-bill", bill.shareId);
       router.push("/create/review");
     } catch {
@@ -114,7 +140,7 @@ export function BillUpload() {
               type="file"
               accept="image/*"
               disabled={isScanning}
-              onChange={handleFileChange}
+              onChange={(event) => handleFileChange(event, "gallery")}
             />
             <input
               className="sr-only"
@@ -123,7 +149,7 @@ export function BillUpload() {
               accept="image/*"
               capture="environment"
               disabled={isScanning}
-              onChange={handleFileChange}
+              onChange={(event) => handleFileChange(event, "camera")}
             />
           </div>
         </div>

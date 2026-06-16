@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { PostHogProvider } from "@/components/PostHogProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        <PostHogProvider>{children}</PostHogProvider>
+      </body>
     </html>
   );
 }

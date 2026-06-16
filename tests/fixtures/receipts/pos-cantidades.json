@@ -1,0 +1,16 @@
+{
+  "id": "pos-cantidades",
+  "description": "Formato POS con separadores de miles y productos sin propina.",
+  "source": "synthetic-ocr",
+  "rawText": "COMERCIO DEMO\nFECHA 15/06/2026\n1x BEBIDA LATA $1.500\n2x COMPLETO ITALIANO $7.980\n1x PAPAS MEDIANAS $2.990\nSUBTOTAL $12.470\nTOTAL $12.470\nTARJETA DEBITO $12.470",
+  "expected": {
+    "items": [
+      { "name": "BEBIDA LATA", "quantity": 1, "totalPrice": 1500 },
+      { "name": "COMPLETO ITALIANO", "quantity": 2, "totalPrice": 7980 },
+      { "name": "PAPAS MEDIANAS", "quantity": 1, "totalPrice": 2990 }
+    ],
+    "subtotal": 12470,
+    "tip": 0,
+    "total": 12470
+  }
+}

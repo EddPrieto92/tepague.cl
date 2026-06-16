@@ -1,0 +1,16 @@
+{
+  "id": "restaurante-simple",
+  "description": "Boleta de restaurante con cantidades, subtotal, propina y total.",
+  "source": "synthetic-ocr",
+  "rawText": "RESTAURANT LA MESA\nMESA 14\n2x MOJITO $13.800\n1x PAPAS FRITAS $9.000\n4x EMPANADAS $10.000\nSUBTOTAL $32.800\nPROPINA $3.280\nTOTAL C/PROP $36.080",
+  "expected": {
+    "items": [
+      { "name": "MOJITO", "quantity": 2, "totalPrice": 13800 },
+      { "name": "PAPAS FRITAS", "quantity": 1, "totalPrice": 9000 },
+      { "name": "EMPANADAS", "quantity": 4, "totalPrice": 10000 }
+    ],
+    "subtotal": 32800,
+    "tip": 3280,
+    "total": 36080
+  }
+}

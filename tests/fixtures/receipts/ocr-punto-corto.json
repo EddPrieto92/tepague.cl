@@ -1,0 +1,15 @@
+{
+  "id": "ocr-punto-corto",
+  "description": "Caso chileno donde OCR puede leer $12.990 como $12.99.",
+  "source": "synthetic-ocr",
+  "rawText": "BOLETA ELECTRONICA\n1x SANDWICH MECHADA $12.99\n1x JUGO NATURAL $3.500\nSUBTOTAL $16.490\nPROPINA $1.649\nTOTAL $18.139",
+  "expected": {
+    "items": [
+      { "name": "SANDWICH MECHADA", "quantity": 1, "totalPrice": 12990 },
+      { "name": "JUGO NATURAL", "quantity": 1, "totalPrice": 3500 }
+    ],
+    "subtotal": 16490,
+    "tip": 1649,
+    "total": 18139
+  }
+}
