@@ -21,7 +21,7 @@ function appUrl() {
 export async function createFintocCheckoutSession(input: CreateCheckoutSessionInput): Promise<FintocCheckoutSession> {
   if (process.env.FINTOC_MOCK_CHECKOUT === "true" || !process.env.FINTOC_SECRET_KEY) {
     const id = `cs_test_${input.paymentId}`;
-    const redirectUrl = `${appUrl()}/pay/success?payment_id=${input.paymentId}&mock=1`;
+    const redirectUrl = `${appUrl()}/pay/mock-checkout?payment_id=${input.paymentId}`;
     console.info("Checkout Session creada", { id, redirect_url: redirectUrl, mode: "mock_test" });
     return { id, redirect_url: redirectUrl };
   }
