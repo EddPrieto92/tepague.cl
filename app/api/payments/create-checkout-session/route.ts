@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { calculatePaymentSummary } from "@/lib/calculations";
-import { createFintocCheckoutSession, FintocApiError } from "@/lib/fintoc";
+import { createFintocCheckoutSession, FintocApiError, FintocConfigError } from "@/lib/fintoc";
 import { getServerBill, saveServerPayment, SupabasePaymentStoreError, syncBillSnapshot } from "@/lib/server-payment-store";
 import type { Bill, Payment } from "@/lib/types";
 
@@ -85,6 +85,9 @@ export async function POST(request: Request) {
         },
         { status: 502 },
       );
+    }
+    if (error instanceof FintocConfigError) {
+      return NextResponse.json({ error: "fintoc_config_error", detail: error.message }, { status: 500 });
     }
     if (error instanceof SupabasePaymentStoreError) {
       return NextResponse.json({ error: "supabase_payment_persistence_failed", detail: error.detail }, { status: 500 });

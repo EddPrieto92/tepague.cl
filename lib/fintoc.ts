@@ -25,12 +25,30 @@ export class FintocApiError extends Error {
   }
 }
 
+export class FintocConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FintocConfigError";
+  }
+}
+
 function appUrl() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000";
 }
 
+function fintocSecretKey() {
+  const key = process.env.FINTOC_SECRET_KEY?.trim().replace(/^Bearer\s+/i, "").replace(/^["']|["']$/g, "");
+  if (!key) return undefined;
+  if (key.startsWith("pk_")) {
+    throw new FintocConfigError("FINTOC_SECRET_KEY debe usar la Secret key de Fintoc, no la Public key.");
+  }
+  return key;
+}
+
 export async function createFintocCheckoutSession(input: CreateCheckoutSessionInput): Promise<FintocCheckoutSession> {
-  if (process.env.FINTOC_MOCK_CHECKOUT === "true" || !process.env.FINTOC_SECRET_KEY) {
+  const secretKey = fintocSecretKey();
+
+  if (process.env.FINTOC_MOCK_CHECKOUT === "true" || !secretKey) {
     const id = `cs_test_${input.paymentId}`;
     const redirectUrl = `${appUrl()}/pay/mock-checkout?payment_id=${input.paymentId}`;
     console.info("Checkout Session creada", { id, redirect_url: redirectUrl, mode: "mock_test" });
@@ -40,7 +58,7 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
   const response = await fetch("https://api.fintoc.com/v2/checkout_sessions", {
     method: "POST",
     headers: {
-      Authorization: process.env.FINTOC_SECRET_KEY,
+      Authorization: secretKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
