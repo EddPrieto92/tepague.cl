@@ -7,21 +7,20 @@ import { FunSummaryCard } from "@/components/FunSummaryCard";
 import { OrganizerDashboard } from "@/components/OrganizerDashboard";
 import { AppShell, Card, TopBar } from "@/components/ui";
 import { formatCLP } from "@/lib/calculations";
-import { getBillByShareId, getRememberedParticipant } from "@/lib/storage";
-import type { Bill } from "@/lib/types";
+import { getRememberedParticipant } from "@/lib/storage";
+import { usePublicBill } from "@/lib/use-public-bill";
+import { ReceiptPreview } from "@/components/ReceiptPreview";
 
 export default function BillPage() {
   const params = useParams<{ shareId: string }>();
-  const [bill, setBill] = useState<Bill | null>(null);
+  const { bill, error, loading } = usePublicBill(params.shareId, 3000);
   const [participantId, setParticipantId] = useState<string | null>(null);
 
   useEffect(() => {
-    const nextBill = getBillByShareId(params.shareId) ?? null;
-    setBill(nextBill);
     setParticipantId(getRememberedParticipant(params.shareId));
   }, [params.shareId]);
 
-  if (!bill) return null;
+  if (!bill) return <AppShell><TopBar title="Mesa" />{error ? <Card className="text-sm font-bold text-tomato">{error}</Card> : <Card className="text-sm font-bold">{loading ? "Cargando cuenta…" : "Cuenta no disponible."}</Card>}</AppShell>;
 
   return (
     <AppShell>
@@ -41,6 +40,7 @@ export default function BillPage() {
         </Link>
 
         <OrganizerDashboard bill={bill} />
+        <ReceiptPreview imageUrl={bill.imageUrl} />
         <FunSummaryCard bill={bill} />
       </div>
     </AppShell>

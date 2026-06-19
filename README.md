@@ -1,6 +1,16 @@
 # Mesa Cobrada
 
-Mobile-first app para dividir una cuenta y cobrar automaticamente en modo de prueba.
+App mobile-first para cargar una boleta, dividir consumos y cobrar cada parte mediante Fintoc.
+
+## v1.2.1
+
+- Cuenta pública persistida por `shareId` mediante la API y Supabase; `localStorage` queda como caché.
+- Productos con reparto por unidad, compartido, entre todos, invitado o excluido.
+- Personas esperadas, fee anticipado, faltantes por producto y validación contra la boleta.
+- Cuenta receptora validada y enviada a Fintoc Direct Payments.
+- Selecciones recuperables y estados de participante/pago.
+- Boleta visible durante revisión, validación y seguimiento.
+- Transferencia y QR como fallback colapsado; marcado manual desactivado por defecto.
 
 ## Local
 
@@ -18,23 +28,32 @@ npm start -- --hostname 127.0.0.1 --port 3000
 
 ## Fintoc TEST
 
-Variables:
+Configura estas variables únicamente en `.env.local` (ignorado por Git) o en el gestor de secretos del despliegue:
 
 ```bash
 NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
-FINTOC_SECRET_KEY=sk_test_...
-FINTOC_WEBHOOK_SECRET=...
+FINTOC_SECRET_KEY=
+FINTOC_WEBHOOK_SECRET=
 FINTOC_MOCK_CHECKOUT=true
+NEXT_PUBLIC_ENABLE_MANUAL_PAID_FALLBACK=false
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-`FINTOC_MOCK_CHECKOUT=true` permite revisar el flujo local sin credenciales. Para llamar a Fintoc TEST real, usa una llave `sk_test_` y cambia el mock a `false`.
+`FINTOC_MOCK_CHECKOUT=true` permite revisar el flujo local sin credenciales. Para llamar a Fintoc TEST real, carga la credencial desde el gestor de secretos y cambia el mock a `false`.
+
+Nunca guardes valores de credenciales, prefijos, capturas o URLs de sesión en el repositorio, logs, tickets o notas.
 
 Mas detalle en `docs/fintoc-test-setup.md`.
 
-Antes de probar webhooks reales, ejecuta la migracion SQL en `supabase/migrations`.
+Antes de probar links públicos o webhooks reales, ejecuta en orden las migraciones SQL de `supabase/migrations`.
+
+## Persistencia
+
+Las pantallas públicas leen `GET /api/bills/[shareId]`. Los cambios se sincronizan con `POST /api/bills/sync` y pueden actualizarse con `PATCH /api/bills/[billId]`.
+
+Sin credenciales Supabase, el servidor usa memoria únicamente para desarrollo local. En un despliegue real, la migración y `SUPABASE_SERVICE_ROLE_KEY` son obligatorias para compartir entre dispositivos.
 
 ## Verificacion
 
@@ -43,3 +62,5 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+Escenarios de aceptación: `docs/v1.2.1-qa.md`.

@@ -1,21 +1,31 @@
 "use client";
 
 import { UserRound } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import type { Bill } from "@/lib/types";
 import { addParticipant } from "@/lib/storage";
+import { persistPublicBill } from "@/lib/public-bills";
+import { trackEvent } from "@/lib/analytics";
 import { Button, Card, Input, Label } from "./ui";
 
 export function ParticipantEntry({ bill }: { bill: Bill }) {
-  const router = useRouter();
   const [name, setName] = useState("");
+  const [error, setError] = useState("");
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const nextBill = addParticipant(bill, name.trim() || "Invitado");
-    const participant = nextBill.participants.at(-1);
-    if (participant) router.push(`/bill/${bill.shareId}/join?participantId=${participant.id}`);
+    setError("");
+    try {
+      const nextBill = addParticipant(bill, name.trim() || "Invitado");
+      const participant = nextBill.participants.at(-1);
+      if (participant) {
+        await persistPublicBill(nextBill, participant.id);
+        trackEvent("participant_started", { bill_share_id: bill.shareId });
+        window.location.href = `/bill/${bill.shareId}/join?participantId=${participant.id}`;
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "No pudimos guardar tu acceso.");
+    }
   }
 
   return (
@@ -31,6 +41,7 @@ export function ParticipantEntry({ bill }: { bill: Bill }) {
           <Input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Nico" />
         </div>
       </Card>
+      {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
       <Button className="w-full" type="submit">
         Entrar
       </Button>

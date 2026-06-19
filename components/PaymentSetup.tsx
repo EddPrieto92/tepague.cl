@@ -3,6 +3,8 @@
 import type { Bill, PaymentMethod } from "@/lib/types";
 import { updatePaymentProfile } from "@/lib/storage";
 import { Card, Input, Label } from "./ui";
+import { BANK_ACCOUNT_TYPES, CHILEAN_BANKS } from "@/lib/payment-profile";
+import type { BankAccountType } from "@/lib/types";
 
 type Props = {
   bill: Bill;
@@ -18,7 +20,7 @@ export function PaymentSetup({ bill, onChange }: Props) {
     holderName: bill.receiverName ?? "",
     holderId: bill.receiverIdentifier ?? "",
     institutionId: bill.bankName ?? "",
-    accountType: bill.accountType ?? "",
+    accountType: bill.accountType === "checking_account" || bill.accountType === "sight_account" ? bill.accountType : "",
     accountNumber: bill.accountNumber ?? "",
     authorized: false,
   };
@@ -68,11 +70,25 @@ export function PaymentSetup({ bill, onChange }: Props) {
         </div>
         <div>
           <Label>Banco</Label>
-          <Input value={profile.institutionId} onChange={(event) => updateProfile({ institutionId: event.target.value })} />
+          <select
+            className="min-h-12 w-full rounded-lg border-2 border-ink bg-white px-3 font-bold"
+            value={profile.institutionId}
+            onChange={(event) => updateProfile({ institutionId: event.target.value })}
+          >
+            <option value="">Seleccionar banco</option>
+            {CHILEAN_BANKS.map((bank) => <option key={bank.id} value={bank.id}>{bank.name}</option>)}
+          </select>
         </div>
         <div>
           <Label>Tipo cuenta</Label>
-          <Input value={profile.accountType} onChange={(event) => updateProfile({ accountType: event.target.value })} />
+          <select
+            className="min-h-12 w-full rounded-lg border-2 border-ink bg-white px-3 font-bold"
+            value={profile.accountType}
+            onChange={(event) => updateProfile({ accountType: event.target.value as BankAccountType })}
+          >
+            <option value="">Seleccionar tipo</option>
+            {BANK_ACCOUNT_TYPES.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+          </select>
         </div>
         <div className="col-span-2">
           <Label>Numero</Label>

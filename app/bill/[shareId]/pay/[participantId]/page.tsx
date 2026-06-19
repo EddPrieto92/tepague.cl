@@ -1,21 +1,15 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
 import { PaymentInstructions } from "@/components/PaymentInstructions";
-import { AppShell, TopBar } from "@/components/ui";
-import { getBillByShareId } from "@/lib/storage";
-import type { Bill } from "@/lib/types";
+import { AppShell, Card, TopBar } from "@/components/ui";
+import { usePublicBill } from "@/lib/use-public-bill";
 
 export default function PayPage() {
   const params = useParams<{ shareId: string; participantId: string }>();
-  const [bill, setBill] = useState<Bill | null>(null);
+  const { bill, error, loading } = usePublicBill(params.shareId);
 
-  useEffect(() => {
-    setBill(getBillByShareId(params.shareId) ?? null);
-  }, [params.shareId]);
-
-  if (!bill) return null;
+  if (!bill) return <AppShell><TopBar title="Pago" href={`/bill/${params.shareId}`} /><Card className="text-sm font-bold">{error || (loading ? "Cargando cuenta…" : "Cuenta no disponible.")}</Card></AppShell>;
 
   return (
     <AppShell>

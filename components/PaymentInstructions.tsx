@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Loader2 } from "lucide-react";
+import { CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Bill } from "@/lib/types";
@@ -8,6 +8,7 @@ import { calculatePaymentSummary, formatCLP } from "@/lib/calculations";
 import { markParticipantPaid, recordPaymentOnBill } from "@/lib/storage";
 import { Button, Card } from "./ui";
 import { QRPaymentBlock } from "./QRPaymentBlock";
+import { trackEvent } from "@/lib/analytics";
 
 export function PaymentInstructions({ bill, participantId }: { bill: Bill; participantId: string }) {
   const router = useRouter();
@@ -15,6 +16,8 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
   const [error, setError] = useState("");
   const summary = calculatePaymentSummary(bill, participantId);
   const participant = summary.participant;
+  const manualFallbackEnabled = process.env.NEXT_PUBLIC_ENABLE_MANUAL_PAID_FALLBACK === "true";
+  const [copied, setCopied] = useState(false);
 
   function paid() {
     markParticipantPaid(bill, participantId);
@@ -24,6 +27,7 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
   async function payWithFintoc() {
     setError("");
     setIsPaying(true);
+    trackEvent("payment_started", { bill_share_id: bill.shareId, participant_id: participantId, amount: summary.totalAmount });
     try {
       await fetch("/api/bills/sync", {
         method: "POST",
@@ -59,6 +63,20 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
     }
   }
 
+  async function copyTransferData() {
+    const text = [
+      `Nombre: ${bill.receiverName || ""}`,
+      `RUT: ${bill.receiverIdentifier || ""}`,
+      `Banco: ${bill.bankName || ""}`,
+      `Tipo cuenta: ${bill.accountType || ""}`,
+      `Número: ${bill.accountNumber || ""}`,
+      `Monto: ${formatCLP(summary.totalAmount)}`,
+      `Nota: ${bill.paymentNote || bill.title}`,
+    ].join("\n");
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+  }
+
   if (!participant) return null;
 
   return (
@@ -73,7 +91,11 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
         <dl className="mt-3 grid gap-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="font-bold text-ink/60">Consumo</dt>
-            <dd className="font-black">{formatCLP(summary.amount)}</dd>
+            <dd className="font-black">{formatCLP(summary.consumptionAmount)}</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="font-bold text-ink/60">Propina</dt>
+            <dd className="font-black">{formatCLP(summary.tipAmount)}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="font-bold text-ink/60">Servicio</dt>
@@ -91,21 +113,13 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
       </Button>
       {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
 
-      {bill.paymentLink ? (
-        <a
-          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-ink bg-limewash px-4 py-2 text-sm font-black text-ink shadow-[4px_4px_0_#151515]"
-          href={bill.paymentLink}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <ExternalLink size={18} /> Abrir link de pago
-        </a>
-      ) : null}
-
-      <QRPaymentBlock url={bill.paymentQrUrl} />
-
-      <Card>
-        <h2 className="text-lg font-black">Transferencia</h2>
+      <details className="rounded-lg border-2 border-ink bg-white p-4 shadow-soft">
+        <summary className="cursor-pointer text-lg font-black">Otros métodos</summary>
+        <div className="mt-4 grid gap-3">
+          {bill.paymentLink ? <a className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-ink bg-white px-4 py-2 text-sm font-black text-ink" href={bill.paymentLink} target="_blank" rel="noreferrer"><ExternalLink size={18} /> Abrir link de pago</a> : null}
+          <QRPaymentBlock url={bill.paymentQrUrl} />
+        </div>
+        <h2 className="mt-4 text-lg font-black">Transferencia</h2>
         <dl className="mt-3 grid gap-2 text-sm">
           <div className="flex justify-between gap-3">
             <dt className="font-bold text-ink/60">Nombre</dt>
@@ -132,11 +146,10 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
             <dd className="text-right font-black">{bill.paymentNote || bill.title}</dd>
           </div>
         </dl>
-      </Card>
+        <button className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border-2 border-ink bg-paper px-4 text-sm font-black" onClick={copyTransferData} type="button"><Copy size={18} /> {copied ? "Datos copiados" : "Copiar datos"}</button>
+      </details>
 
-      <Button className="w-full" onClick={paid} type="button">
-        <CheckCircle2 size={18} /> Ya transferi
-      </Button>
+      {manualFallbackEnabled ? <Button className="w-full" onClick={paid} type="button"><CheckCircle2 size={18} /> Ya transferí (fallback)</Button> : null}
     </div>
   );
 }

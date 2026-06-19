@@ -4,9 +4,16 @@ type CreateCheckoutSessionInput = {
   paymentId: string;
   amount: number;
   billId: string;
+  billShareId: string;
   participantId: string;
   description: string;
   receiverName?: string;
+  recipientAccount: {
+    holder_id: string;
+    number: string;
+    type: "checking_account" | "sight_account";
+    institution_id: string;
+  };
 };
 
 export type FintocCheckoutSession = {
@@ -18,7 +25,6 @@ export class FintocApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly body: string,
   ) {
     super(message);
     this.name = "FintocApiError";
@@ -51,7 +57,7 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
   if (process.env.FINTOC_MOCK_CHECKOUT === "true" || !secretKey) {
     const id = `cs_test_${input.paymentId}`;
     const redirectUrl = `${appUrl()}/pay/mock-checkout?payment_id=${input.paymentId}`;
-    console.info("Checkout Session creada", { id, redirect_url: redirectUrl, mode: "mock_test" });
+    console.info("Checkout Session creada", { id, mode: "mock_test" });
     return { id, redirect_url: redirectUrl };
   }
 
@@ -64,7 +70,13 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
     body: JSON.stringify({
       currency: "CLP",
       success_url: `${appUrl()}/pay/success?payment_id=${input.paymentId}`,
-      cancel_url: `${appUrl()}/pay/cancel?payment_id=${input.paymentId}`,
+      cancel_url: `${appUrl()}/pay/cancel?payment_id=${input.paymentId}&bill_share_id=${input.billShareId}&participant_id=${input.participantId}`,
+      payment_method_types: ["bank_transfer"],
+      payment_method_options: {
+        bank_transfer: {
+          recipient_account: input.recipientAccount,
+        },
+      },
       metadata: {
         bill_id: input.billId,
         participant_id: input.participantId,
@@ -87,13 +99,13 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    console.error("Fintoc checkout error", { status: response.status, body });
-    throw new FintocApiError("No se pudo crear la sesion de pago Fintoc.", response.status, body);
+    await response.body?.cancel();
+    console.error("Fintoc checkout error", { status: response.status });
+    throw new FintocApiError("No se pudo crear la sesion de pago Fintoc.", response.status);
   }
 
   const session = (await response.json()) as FintocCheckoutSession;
-  console.info("Checkout Session creada", { id: session.id, redirect_url: session.redirect_url });
+  console.info("Checkout Session creada", { id: session.id });
   return session;
 }
 
@@ -114,5 +126,7 @@ export function verifyFintocWebhookSignature(rawBody: string, signatureHeader: s
 
   const message = `${timestamp}.${rawBody}`;
   const digest = crypto.createHmac("sha256", secret).update(message).digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+  const expected = Buffer.from(digest);
+  const received = Buffer.from(signature);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }

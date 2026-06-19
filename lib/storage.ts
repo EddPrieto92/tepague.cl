@@ -1,6 +1,6 @@
 "use client";
 
-import { calculateBillTotal } from "./calculations";
+import { calculateBillTotal, calculateBillValidation } from "./calculations";
 import { demoBill } from "./mock-data";
 import type { ParsedReceipt } from "./receipt-ocr";
 import type { Bill, BillItem, Participant, ParticipantItem, Payment, UserPaymentProfile } from "./types";
@@ -30,6 +30,12 @@ export function makeEmptyBill(): Bill {
     shareId: `mesa-${Math.random().toString(36).slice(2, 8)}`,
     title: "",
     imageUrl: "",
+    ocrStatus: "empty",
+    expectedParticipantCount: 1,
+    enteredSubtotal: 0,
+    enteredTip: 0,
+    enteredTotal: 0,
+    missingAmount: 0,
     subtotal: 0,
     tip: 0,
     serviceFee: 0,
@@ -39,6 +45,16 @@ export function makeEmptyBill(): Bill {
     serviceFeeTotal: 0,
     serviceFeePerParticipant: 0,
     payments: [],
+    paymentMethod: "mixed",
+    paymentLink: "",
+    paymentQrUrl: "",
+    receiverName: "",
+    bankName: "",
+    accountType: "",
+    accountNumber: "",
+    receiverIdentifier: "",
+    paymentNote: "",
+    paymentProfile: undefined,
     status: "draft",
     participants: [],
     createdAt: now,
@@ -78,13 +94,21 @@ export function upsertBill(bill: Bill) {
     discount: bill.discount,
     includeTip: includeTipInTotal,
   });
+  const normalizedItems = bill.items.map((item) => ({
+    ...item,
+    splitMode: item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit"),
+  }));
+  const validation = calculateBillValidation({ ...bill, items: normalizedItems });
   const nextBill: Bill = {
     ...bill,
+    items: normalizedItems,
+    expectedParticipantCount: Math.max(1, bill.expectedParticipantCount || 1),
     subtotal,
     includeTipInTotal,
     total: calculatedTotal || bill.total,
     shareId: bill.shareId || slugify(bill.title) || uid("mesa"),
     updatedAt: new Date().toISOString(),
+    ...validation,
   };
   const index = bills.findIndex((candidate) => candidate.id === nextBill.id);
   const nextBills = index >= 0 ? bills.with(index, nextBill) : [nextBill, ...bills];
@@ -101,14 +125,14 @@ export function createBillFromTitle(
   imageUrl?: string,
   parsedItems: Omit<BillItem, "id" | "billId">[] = [],
   parsedReceipt?: Pick<ParsedReceipt, "subtotal" | "tip" | "total">,
+  ocrStatus: Bill["ocrStatus"] = "empty",
 ) {
   const bill = makeEmptyBill();
   const seededItems: BillItem[] =
     parsedItems.length > 0
-      ? parsedItems.map((item) => ({ ...item, id: uid("item"), billId: bill.id }))
+      ? parsedItems.map((item) => ({ ...item, id: uid("item"), billId: bill.id, splitMode: item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit") }))
       : [
-          { id: uid("item"), billId: bill.id, name: "Producto 1", quantity: 1, unitPrice: 8000, totalPrice: 8000, isShared: false },
-          { id: uid("item"), billId: bill.id, name: "Producto compartido", quantity: 1, unitPrice: 12000, totalPrice: 12000, isShared: true },
+          { id: uid("item"), billId: bill.id, name: "Producto 1", quantity: 1, unitPrice: 0, totalPrice: 0, isShared: false, splitMode: "unit" },
         ];
   const itemSubtotal = seededItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const subtotal = parsedReceipt?.subtotal || itemSubtotal;
@@ -120,6 +144,10 @@ export function createBillFromTitle(
     title,
     shareId: `${slugify(title) || "mesa"}-${Math.random().toString(36).slice(2, 6)}`,
     imageUrl,
+    ocrStatus,
+    receiptSubtotal: parsedReceipt?.subtotal || undefined,
+    receiptTip: parsedReceipt?.tip || undefined,
+    receiptTotal: parsedReceipt?.total || undefined,
     subtotal,
     tip,
     total,
@@ -162,7 +190,7 @@ export function updateParticipantItems(bill: Bill, participantId: string, items:
     ...bill,
     participants: bill.participants.map((participant) =>
       participant.id === participantId
-        ? { ...participant, status: confirm ? "confirmed" : participant.status, items }
+        ? { ...participant, status: confirm ? "confirmed" : "selecting", items }
         : participant,
     ),
   });

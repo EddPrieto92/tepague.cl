@@ -1,7 +1,7 @@
 "use client";
 
 import type { Bill } from "@/lib/types";
-import { calculateBillTotal, formatCLP } from "@/lib/calculations";
+import { calculateBillTotal, calculateBillValidation, calculateMesaCobradaServiceFee, formatCLP } from "@/lib/calculations";
 import { Card, Input, Label } from "./ui";
 
 type Props = {
@@ -10,7 +10,6 @@ type Props = {
 };
 
 export function BillTotalsEditor({ bill, onChange }: Props) {
-  const itemsSubtotal = bill.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const includeTipInTotal = bill.includeTipInTotal !== false;
   const calculatedTotal = calculateBillTotal({
     subtotal: bill.subtotal,
@@ -19,8 +18,8 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
     discount: bill.discount,
     includeTip: includeTipInTotal,
   });
-  const subtotalDelta = bill.subtotal - itemsSubtotal;
-  const totalsDelta = bill.total - calculatedTotal;
+  const validation = calculateBillValidation(bill);
+  const serviceFee = calculateMesaCobradaServiceFee(bill.expectedParticipantCount || 1);
 
   function update(patch: Partial<Bill>) {
     const nextBill = { ...bill, ...patch };
@@ -78,20 +77,34 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
       </div>
 
       <div className="rounded-lg bg-paper p-3 text-sm font-bold text-ink/70">
-        <p className="mb-3 text-xs font-black uppercase text-ink/55">Validacion contra boleta</p>
+        <p className="mb-3 text-xs font-black uppercase text-ink/55">Validación contra boleta</p>
         <div className="flex justify-between gap-3">
-          <span>Productos detectados</span>
-          <span className="text-right font-black text-ink">{formatCLP(itemsSubtotal)}</span>
+          <span>Total boleta</span>
+          <span className="text-right font-black text-ink">{formatCLP(bill.receiptTotal ?? bill.total)}</span>
         </div>
         <div className="mt-2 flex justify-between gap-3">
-          <span>Productos vs subtotal</span>
-          <span className="text-right font-black text-ink">{formatCLP(subtotalDelta)}</span>
+          <span>Total ingresado</span>
+          <span className="text-right font-black text-ink">{formatCLP(validation.enteredTotal)}</span>
         </div>
         <div className="mt-2 flex justify-between gap-3">
-          <span>{includeTipInTotal ? "Subtotal + propina vs total" : "Subtotal vs total"}</span>
-          <span className="text-right font-black text-ink">{formatCLP(totalsDelta)}</span>
+          <span>Faltante</span>
+          <span className="text-right font-black text-ink">{formatCLP(validation.missingAmount)}</span>
+        </div>
+        <div className="mt-2 flex justify-between gap-3">
+          <span>Propina</span>
+          <span className="text-right font-black text-ink">{formatCLP(bill.tip)}</span>
+        </div>
+        <div className="mt-2 flex justify-between gap-3">
+          <span>Servicio estimado</span>
+          <span className="text-right font-black text-ink">{formatCLP(serviceFee)}</span>
         </div>
       </div>
+
+      {Math.abs(validation.missingAmount) >= 100 ? (
+        <div className="rounded-lg border-2 border-tomato bg-tomato/10 p-3 text-sm font-bold text-tomato">
+          La cuenta aún no cuadra con la boleta. {validation.missingAmount > 0 ? `Faltan ${formatCLP(validation.missingAmount)} por ingresar o ajustar.` : `Hay ${formatCLP(Math.abs(validation.missingAmount))} ingresados de más.`}
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between rounded-lg bg-ink p-4 text-paper">
         <span className="text-sm font-black uppercase">{includeTipInTotal ? "Total con propina" : "Total sin propina"}</span>

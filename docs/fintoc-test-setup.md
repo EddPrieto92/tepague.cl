@@ -1,20 +1,21 @@
 # Fintoc TEST setup
 
-Mesa Cobrada V0.2 validates the payment flow in Fintoc TEST mode.
+Mesa Cobrada v1.2.1 valida Direct Payments en modo TEST.
 
 ## Environment
 
 ```bash
 NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
-FINTOC_SECRET_KEY=sk_test_...
-FINTOC_WEBHOOK_SECRET=...
+FINTOC_SECRET_KEY=
+FINTOC_WEBHOOK_SECRET=
 FINTOC_MOCK_CHECKOUT=false
+NEXT_PUBLIC_ENABLE_MANUAL_PAID_FALLBACK=false
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Use Fintoc test keys. Test keys use the `sk_test_` prefix and simulate objects without moving money.
+Load test credentials only from an untracked local environment file or the deployment secret manager. Never paste values, prefixes, screenshots, or checkout-session URLs into documentation or logs.
 
 For local product review without Fintoc credentials, keep:
 
@@ -38,15 +39,25 @@ Handled events:
 - `checkout_session.expired`
 - `payment_intent.succeeded`
 - `payment_intent.failed`
+- `payment_intent.rejected`
+- `payment_intent.pending`
+- `payment_intent.expired`
 - `payment_intent.requires_action`
 
 The endpoint verifies `Fintoc-Signature` when `FINTOC_WEBHOOK_SECRET` is configured.
 
 ## Supabase
 
-Run the SQL migration in `supabase/migrations/20260616120000_fintoc_payments.sql` before testing real webhooks.
+Run both SQL migrations in `supabase/migrations` before testing public bills or real webhooks.
 
-Payments and webhook idempotency are persisted in Supabase when `SUPABASE_SERVICE_ROLE_KEY` is configured. Bills still use `localStorage`, so the frontend sends a minimal bill snapshot before checkout so the backend can calculate the amount.
+Bills, items, participants, claims, payment profiles, payments and webhook idempotency are persisted in Supabase when the service credential is configured. `localStorage` is only a local cache.
+
+Direct Payments sends a bank-transfer-only checkout and the bill recipient account. Recipient bank and account type come from controlled selectors; arbitrary text is rejected before sharing.
+
+References:
+
+- [Fintoc Direct Payments](https://docs.fintoc.com/docs/setup-direct-payment)
+- [Fintoc Checkout Sessions](https://docs.fintoc.com/reference/create-checkout-session)
 
 ## Test flow
 

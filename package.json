@@ -1,6 +1,6 @@
 {
   "name": "mesa-cobrada",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:receipts": "vitest run tests/receipt-parser.test.ts"
+    "test:receipts": "vitest run tests/receipt-parser.test.ts",
+    "security:secrets": "bash scripts/check-secrets.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

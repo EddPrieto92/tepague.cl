@@ -183,6 +183,7 @@ export function parseReceiptText(text: string): ParsedReceipt {
       unitPrice: Math.round(price / quantity),
       totalPrice: price,
       isShared: false,
+      splitMode: "unit",
     });
   }
 

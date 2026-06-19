@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Bill, ParticipantItem } from "@/lib/types";
-import { calculateParticipantFinalAmount, formatCLP } from "@/lib/calculations";
+import { calculateItemClaimSummary, calculateParticipantBreakdown, formatCLP } from "@/lib/calculations";
 import { makeParticipantItem, updateParticipantItems, updateParticipantTipPreference } from "@/lib/storage";
+import { persistPublicBill } from "@/lib/public-bills";
+import { trackEvent } from "@/lib/analytics";
 import { Button, Card, SecondaryButton } from "./ui";
 import { QuantitySelector } from "./QuantitySelector";
 import { SharedItemToggle } from "./SharedItemToggle";
@@ -20,24 +21,10 @@ export function ItemClaimList({ bill, participantId }: Props) {
   const [currentBill, setCurrentBill] = useState(bill);
   const participant = currentBill.participants.find((candidate) => candidate.id === participantId);
   const items = participant?.items ?? [];
+  const [error, setError] = useState("");
 
-  const sharedCounts = useMemo(
-    () =>
-      currentBill.items.reduce<Record<string, number>>((acc, item) => {
-        if (!item.isShared) return acc;
-        acc[item.id] = currentBill.participants.filter((candidate) =>
-          candidate.items.some((participantItem) => participantItem.billItemId === item.id),
-        ).length;
-        return acc;
-      }, {}),
-    [currentBill],
-  );
-
-  const total = calculateParticipantFinalAmount(
-    { ...currentBill, tip: participant?.includeTip === false ? 0 : currentBill.tip },
-    items,
-    sharedCounts,
-  );
+  const breakdown = calculateParticipantBreakdown(currentBill, participantId);
+  const total = breakdown.total;
 
   function setItem(itemId: string, quantity: number) {
     const item = currentBill.items.find((candidate) => candidate.id === itemId);
@@ -46,11 +33,23 @@ export function ItemClaimList({ bill, participantId }: Props) {
     if (quantity > 0) {
       next.push(makeParticipantItem(participantId, itemId, item.isShared ? 1 : quantity, item.unitPrice * quantity));
     }
-    setCurrentBill(updateParticipantItems(currentBill, participantId, next));
+    const nextBill = updateParticipantItems(currentBill, participantId, next);
+    setCurrentBill(nextBill);
+    trackEvent("participant_claimed_item", { bill_item_id: itemId, quantity });
+    void persistPublicBill(nextBill, participantId).catch((saveError) => setError(saveError instanceof Error ? saveError.message : "No pudimos guardar tu selección."));
   }
 
   function claimedQuantity(itemId: string) {
     return items.find((item) => item.billItemId === itemId)?.quantity ?? 0;
+  }
+
+  function setInvitedPayer(itemId: string, enabled: boolean) {
+    const nextBill = {
+      ...currentBill,
+      items: currentBill.items.map((item) => item.id === itemId ? { ...item, paidByParticipantId: enabled ? participantId : undefined } : item),
+    };
+    setCurrentBill(nextBill);
+    void persistPublicBill(nextBill, participantId).catch(() => setError("No pudimos guardar quién invita."));
   }
 
   function remainingStock(itemId: string, quantity: number) {
@@ -61,9 +60,16 @@ export function ItemClaimList({ bill, participantId }: Props) {
     return Math.max(0, quantity - claimedByOthers);
   }
 
-  function confirm() {
+  async function confirm() {
+    setError("");
     const nextBill = updateParticipantItems(currentBill, participantId, items as ParticipantItem[], true);
-    router.push(`/bill/${nextBill.shareId}/pay/${participantId}`);
+    try {
+      await persistPublicBill(nextBill, participantId);
+      trackEvent("participant_confirmed", { amount: Math.round(total) });
+      router.push(`/bill/${nextBill.shareId}/pay/${participantId}`);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "No pudimos confirmar tu selección.");
+    }
   }
 
   if (!participant) return null;
@@ -78,9 +84,11 @@ export function ItemClaimList({ bill, participantId }: Props) {
         </div>
       </Card>
 
-      {currentBill.items.map((item) => {
+      {currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded").map((item) => {
         const value = claimedQuantity(item.id);
         const max = remainingStock(item.id, item.quantity) + value;
+        const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
+        const availability = calculateItemClaimSummary(currentBill, item);
         return (
           <Card key={item.id}>
             <div className="flex items-start justify-between gap-3">
@@ -88,11 +96,18 @@ export function ItemClaimList({ bill, participantId }: Props) {
                 <h2 className="text-lg font-black">{item.name}</h2>
                 <p className="text-sm font-bold text-ink/60">{formatCLP(item.unitPrice)} c/u</p>
               </div>
-              <span className="rounded-full bg-paper px-3 py-1 text-xs font-black">stock {max}</span>
+              <span className="rounded-full bg-paper px-3 py-1 text-xs font-black">Disponible: {Math.max(0, Math.round(availability.remainingQuantity + value))}</span>
             </div>
+            <p className="mt-2 text-xs font-bold text-ink/55">Ya reclamaste: {value}</p>
             <div className="mt-3">
-              {item.isShared ? (
+              {splitMode === "shared_by_claimants" ? (
                 <SharedItemToggle checked={value > 0} onChange={(checked) => setItem(item.id, checked ? 1 : 0)} />
+              ) : splitMode === "split_all" ? (
+                <p className="rounded-lg bg-limewash p-3 text-sm font-black">Se divide automáticamente entre todos.</p>
+              ) : splitMode === "invited_by" ? (
+                item.paidByParticipantId && item.paidByParticipantId !== participantId
+                  ? <p className="rounded-lg bg-paper p-3 text-sm font-black">Este producto lo paga otra persona.</p>
+                  : <SharedItemToggle checked={item.paidByParticipantId === participantId} onChange={(checked) => setInvitedPayer(item.id, checked)} label="Yo invito este producto" />
               ) : (
                 <QuantitySelector value={value} max={max} onChange={(next) => setItem(item.id, next)} />
               )}
@@ -107,15 +122,22 @@ export function ItemClaimList({ bill, participantId }: Props) {
             checked={participant.includeTip !== false}
             className="size-5 accent-ink"
             type="checkbox"
-            onChange={(event) => setCurrentBill(updateParticipantTipPreference(currentBill, participantId, event.target.checked))}
+            onChange={(event) => {
+              const nextBill = updateParticipantTipPreference(currentBill, participantId, event.target.checked);
+              setCurrentBill(nextBill);
+              void persistPublicBill(nextBill, participantId).catch(() => setError("No pudimos guardar tu preferencia de propina."));
+            }}
           />
           Incluir propina
         </label>
-        <span className="text-sm font-black">{formatCLP(currentBill.tip)}</span>
+        <span className="text-sm font-black">{formatCLP(breakdown.tip)}</span>
       </Card>
 
+      {items.length === 0 && total <= 0 ? <p className="rounded-lg bg-paper p-3 text-sm font-bold">Aún no has seleccionado productos. Selecciona lo que consumiste para calcular tu deuda.</p> : null}
+      {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
+
       <div className="grid gap-3">
-        <Button disabled={items.length === 0} onClick={confirm} type="button">
+        <Button disabled={items.length === 0 && total <= 0} onClick={confirm} type="button">
           Confirmar seleccion
         </Button>
         <SecondaryButton onClick={() => router.push(`/bill/${bill.shareId}`)} type="button">

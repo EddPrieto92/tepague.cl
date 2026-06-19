@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, Trash2 } from "lucide-react";
-import type { Bill, BillItem } from "@/lib/types";
+import type { Bill, BillItem, SplitMode } from "@/lib/types";
 import { formatCLP } from "@/lib/calculations";
 import { Card, Input, Label, SecondaryButton } from "./ui";
 
@@ -28,7 +28,7 @@ export function BillItemEditor({ bill, onChange }: Props) {
   function addItem() {
     onChange([
       ...bill.items,
-      { id: uid(), billId: bill.id, name: "Nuevo producto", quantity: 1, unitPrice: 0, totalPrice: 0, isShared: false },
+      { id: uid(), billId: bill.id, name: "Nuevo producto", quantity: 1, unitPrice: 0, totalPrice: 0, isShared: false, splitMode: "unit" },
     ]);
   }
 
@@ -72,17 +72,35 @@ export function BillItemEditor({ bill, onChange }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-paper p-3">
-            <label className="flex items-center gap-2 text-sm font-black">
-              <input
-                checked={item.isShared}
-                className="size-5 accent-ink"
-                type="checkbox"
-                onChange={(event) => updateItem(item.id, { isShared: event.target.checked })}
-              />
-              Compartido
-            </label>
-            <span className="text-sm font-black">{formatCLP(item.totalPrice)}</span>
+          <div className="rounded-lg bg-paper p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-black uppercase text-ink/60">Modo de reparto</span>
+              <span className="text-sm font-black">{formatCLP(item.totalPrice)}</span>
+            </div>
+            <select
+              className="mt-2 min-h-11 w-full rounded-lg border-2 border-ink bg-white px-3 text-sm font-bold"
+              value={item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit")}
+              onChange={(event) => {
+                const splitMode = event.target.value as SplitMode;
+                updateItem(item.id, { splitMode, isShared: splitMode === "shared_by_claimants", paidByParticipantId: splitMode === "invited_by" ? item.paidByParticipantId : undefined });
+              }}
+            >
+              <option value="unit">Por unidad</option>
+              <option value="shared_by_claimants">Compartido entre quienes lo marcan</option>
+              <option value="split_all">Dividir entre todos</option>
+              <option value="invited_by">Lo paga otra persona</option>
+              <option value="excluded">Excluir del cobro</option>
+            </select>
+            {(item.splitMode ?? "unit") === "invited_by" ? (
+              <select
+                className="mt-2 min-h-11 w-full rounded-lg border-2 border-ink bg-white px-3 text-sm font-bold"
+                value={item.paidByParticipantId ?? ""}
+                onChange={(event) => updateItem(item.id, { paidByParticipantId: event.target.value || undefined })}
+              >
+                <option value="">Elegir quién invita</option>
+                {bill.participants.map((participant) => <option key={participant.id} value={participant.id}>{participant.name}</option>)}
+              </select>
+            ) : null}
           </div>
         </Card>
       ))}

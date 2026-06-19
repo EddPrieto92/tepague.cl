@@ -17,7 +17,7 @@ Never send:
 
 Only send aggregate metadata.
 
-## Current events
+## Current events v1.2.1
 
 ### `receipt_image_selected`
 
@@ -51,6 +51,21 @@ Only send aggregate metadata.
 - `total_detected`
 - `app_version`
 
+### Lifecycle
+
+- `ocr_completed`
+- `ocr_partial`
+- `ocr_failed`
+- `bill_reviewed`
+- `bill_shared`
+- `participant_started`
+- `participant_claimed_item`
+- `participant_confirmed`
+- `payment_started`
+- `payment_succeeded`
+- `payment_failed`
+- `payment_cancelled`
+
 ## First dashboards
 
 - OCR success rate: `receipt_ocr_completed / receipt_image_selected`
@@ -60,14 +75,4 @@ Only send aggregate metadata.
 - Median OCR duration
 - Gallery vs camera success rate
 
-## Later events
-
-- `receipt_item_edited`
-- `receipt_item_added`
-- `receipt_item_deleted`
-- `receipt_total_edited`
-- `receipt_tip_edited`
-- `share_link_opened`
-- `participant_joined`
-- `participant_claim_confirmed`
-- `payment_marked_paid`
+All payloads are aggregate identifiers, amounts and statuses; receipt content and payment credentials are excluded.

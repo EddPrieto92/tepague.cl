@@ -45,6 +45,7 @@ function paymentToRow(payment: Payment) {
   return {
     id: payment.id,
     bill_id: payment.billId,
+    bill_share_id: payment.billShareId,
     participant_id: payment.participantId,
     amount: payment.amount,
     service_fee_amount: payment.serviceFeeAmount,
@@ -65,6 +66,7 @@ function rowToPayment(row: PaymentRow): Payment {
   return {
     id: row.id,
     billId: row.bill_id,
+    billShareId: row.bill_share_id,
     participantId: row.participant_id,
     amount: row.amount,
     serviceFeeAmount: row.service_fee_amount,

@@ -6,11 +6,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return <main className="safe-screen mx-auto flex w-full max-w-md flex-col px-4 py-5">{children}</main>;
 }
 
-export function TopBar({ title, href = "/" }: { title: string; href?: string }) {
+export function TopBar({ title, href }: { title: string; href?: string }) {
   return (
-    <header className="mb-5 flex items-center justify-between">
-      <Link className="text-sm font-bold text-ink/70" href={href}>
-        Mesa Cobrada
+    <header className="sticky top-0 z-40 -mx-4 mb-5 flex items-center justify-between border-b-2 border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur">
+      <Link className="text-sm font-bold text-ink/70" href={href ?? "/"}>
+        {href ? "← Volver" : "Mesa Cobrada"}
       </Link>
       <span className="rounded-full bg-ink px-3 py-1 text-xs font-bold text-paper">{title}</span>
     </header>

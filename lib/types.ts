@@ -1,7 +1,11 @@
 export type BillStatus = "draft" | "open" | "locked" | "closed";
-export type ParticipantStatus = "selecting" | "confirmed" | "paid";
+export type ParticipantStatus = "selecting" | "confirmed" | "payment_pending" | "paid" | "failed" | "expired";
 export type PaymentMethod = "link" | "qr" | "transfer" | "mixed";
-export type PaymentStatus = "created" | "redirected" | "succeeded" | "failed" | "expired" | "requires_action";
+export type PaymentStatus = "created" | "redirected" | "pending" | "succeeded" | "failed" | "expired" | "requires_action";
+export type OcrStatus = "success" | "partial" | "empty" | "failed";
+export type SplitMode = "unit" | "shared_by_claimants" | "split_all" | "invited_by" | "excluded";
+export type ClaimStatus = "complete" | "partial" | "unclaimed" | "overclaimed" | "excluded";
+export type BankAccountType = "checking_account" | "sight_account";
 
 export type UserPaymentProfile = {
   id: string;
@@ -9,7 +13,7 @@ export type UserPaymentProfile = {
   holderName: string;
   holderId: string;
   institutionId: string;
-  accountType: string;
+  accountType: BankAccountType | "";
   accountNumber: string;
   authorized: boolean;
   createdAt: string;
@@ -20,6 +24,7 @@ export type Payment = {
   id: string;
   billId: string;
   participantId: string;
+  billShareId: string;
   amount: number;
   serviceFeeAmount: number;
   totalAmount: number;
@@ -40,6 +45,8 @@ export type BillItem = {
   unitPrice: number;
   totalPrice: number;
   isShared: boolean;
+  splitMode: SplitMode;
+  paidByParticipantId?: string;
 };
 
 export type ParticipantItem = {
@@ -74,6 +81,15 @@ export type Bill = {
   shareId: string;
   title: string;
   imageUrl?: string;
+  ocrStatus?: OcrStatus;
+  expectedParticipantCount: number;
+  receiptSubtotal?: number;
+  receiptTip?: number;
+  receiptTotal?: number;
+  enteredSubtotal: number;
+  enteredTip: number;
+  enteredTotal: number;
+  missingAmount: number;
   subtotal: number;
   tip: number;
   serviceFee: number;
@@ -110,10 +126,23 @@ export type DashboardParticipant = {
 
 export type Dashboard = {
   expectedTotal: number;
+  claimedTotal: number;
+  missingClaimAmount: number;
   confirmedTotal: number;
   paidTotal: number;
   pendingTotal: number;
   participants: DashboardParticipant[];
+  missingItems: ItemClaimSummary[];
+};
+
+export type ItemClaimSummary = {
+  itemId: string;
+  name: string;
+  claimedQuantity: number;
+  remainingQuantity: number;
+  claimedAmount: number;
+  remainingAmount: number;
+  claimStatus: ClaimStatus;
 };
 
 export type FunSummary = {

@@ -6,7 +6,9 @@ import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { Button, Card, Input, Label } from "./ui";
 import { trackEvent } from "@/lib/analytics";
 import { createBillFromTitle } from "@/lib/storage";
+import { persistPublicBill } from "@/lib/public-bills";
 import { prepareReceiptImage, recognizeReceiptImage, type OcrProgress, type ParsedReceipt } from "@/lib/receipt-ocr";
+import type { OcrStatus } from "@/lib/types";
 
 export function BillUpload() {
   const router = useRouter();
@@ -20,6 +22,7 @@ export function BillUpload() {
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
   const [error, setError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState<OcrStatus>("empty");
 
   async function scanFile(file: File, source: "camera" | "gallery") {
     const startedAt = performance.now();
@@ -28,6 +31,7 @@ export function BillUpload() {
     setOcrText("");
     setImageName(file.name);
     setIsScanning(true);
+    setOcrStatus("empty");
     setOcrProgress({ status: "Mejorando foto", progress: 0.08 });
     trackEvent("receipt_image_selected", {
       source,
@@ -42,6 +46,9 @@ export function BillUpload() {
       const receipt = await recognizeReceiptImage(prepared.ocrUrl, setOcrProgress);
       setParsedReceipt(receipt);
       setOcrText(receipt.rawText);
+      const hasAnyData = receipt.items.length > 0 || receipt.subtotal > 0 || receipt.tip > 0 || receipt.total > 0 || receipt.rawText.trim().length >= 4;
+      const nextStatus: OcrStatus = receipt.items.length > 0 && receipt.total > 0 ? "success" : hasAnyData ? "partial" : "empty";
+      setOcrStatus(nextStatus);
       trackEvent("receipt_ocr_completed", {
         source,
         duration_ms: Math.round(performance.now() - startedAt),
@@ -50,15 +57,15 @@ export function BillUpload() {
         tip_detected: receipt.tip > 0,
         total_detected: receipt.total > 0,
       });
-      if (receipt.items.length === 0) {
-        setError("No encontre productos claros. Puedes crear la mesa igual y cargarlos manualmente.");
-      }
+      trackEvent(nextStatus === "partial" ? "ocr_partial" : "ocr_completed", { item_count: receipt.items.length });
     } catch (scanError) {
       trackEvent("receipt_ocr_failed", {
         source,
         duration_ms: Math.round(performance.now() - startedAt),
       });
-      setError(scanError instanceof Error ? scanError.message : "No se pudo escanear la boleta.");
+      trackEvent("ocr_failed");
+      setOcrStatus("failed");
+      setError(scanError instanceof Error ? scanError.message : "No pudimos leer la imagen. Prueba con otra foto o ingresa los productos manualmente.");
     } finally {
       setIsScanning(false);
       setOcrProgress(null);
@@ -71,10 +78,11 @@ export function BillUpload() {
     if (file) void scanFile(file, source);
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      const bill = createBillFromTitle(title.trim() || "Mesa sin nombre", imageName, parsedReceipt?.items ?? [], parsedReceipt ?? undefined);
+      const bill = createBillFromTitle(title.trim() || "Mesa sin nombre", previewUrl, parsedReceipt?.items ?? [], parsedReceipt ?? undefined, ocrStatus);
+      await persistPublicBill(bill);
       trackEvent("bill_created", {
         has_ocr: Boolean(parsedReceipt),
         item_count: parsedReceipt?.items.length ?? 0,
@@ -84,8 +92,8 @@ export function BillUpload() {
       });
       window.sessionStorage.setItem("mesa-cobrada:active-bill", bill.shareId);
       router.push("/create/review");
-    } catch {
-      setError("No pude guardar la mesa. Prueba con una foto mas liviana o continua sin guardar la imagen.");
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "No pudimos guardar la mesa.");
     }
   }
 
@@ -123,7 +131,7 @@ export function BillUpload() {
                 type="button"
                 onClick={() => galleryInputRef.current?.click()}
               >
-                <ImagePlus size={18} /> Cargar
+                <ImagePlus size={18} /> Cargar imagen
               </button>
               <button
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border-2 border-ink bg-limewash px-3 text-sm font-black text-ink disabled:cursor-not-allowed disabled:opacity-60"
@@ -131,7 +139,7 @@ export function BillUpload() {
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
               >
-                <Camera size={18} /> Cámara
+                <Camera size={18} /> Tomar foto
               </button>
             </div>
             <input
@@ -168,10 +176,18 @@ export function BillUpload() {
           </div>
         ) : null}
 
-        {!isScanning && parsedReceipt && parsedReceipt.items.length > 0 ? (
+        {!isScanning && parsedReceipt && ocrStatus !== "empty" ? (
           <div className="mt-4 rounded-lg border-2 border-ink bg-limewash p-3">
-            <p className="text-sm font-black">Detecte {parsedReceipt.items.length} productos.</p>
-            <p className="mt-1 text-xs font-bold text-ink/65">Los vas a poder corregir antes de compartir la cuenta.</p>
+            <p className="text-sm font-black">
+              {ocrStatus === "success" ? `Detectamos ${parsedReceipt.items.length} productos.` : "Detectamos algunos datos, revísalos antes de compartir."}
+            </p>
+            <p className="mt-1 text-xs font-bold text-ink/65">Puedes corregir nombres, cantidades y precios.</p>
+          </div>
+        ) : null}
+
+        {!isScanning && parsedReceipt && ocrStatus === "empty" ? (
+          <div className="mt-4 rounded-lg border-2 border-ink bg-white p-3 text-sm font-bold">
+            No logramos detectar productos claros. Puedes cargar la cuenta manualmente.
           </div>
         ) : null}
 

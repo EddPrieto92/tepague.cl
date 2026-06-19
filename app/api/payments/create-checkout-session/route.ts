@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { calculatePaymentSummary } from "@/lib/calculations";
 import { createFintocCheckoutSession, FintocApiError, FintocConfigError } from "@/lib/fintoc";
 import { getServerBill, saveServerPayment, SupabasePaymentStoreError, syncBillSnapshot } from "@/lib/server-payment-store";
+import { getPublicBill, savePublicBill } from "@/lib/public-bill-store";
+import { isValidPaymentProfile, normalizeChileanHolderId } from "@/lib/payment-profile";
 import type { Bill, Payment } from "@/lib/types";
 
 type Payload = {
@@ -25,9 +27,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "bill_id_and_participant_id_required" }, { status: 400 });
     }
 
-    const bill = getServerBill(billId);
+    const bill = getServerBill(billId) ?? await getPublicBill(billId);
     if (!bill) return NextResponse.json({ error: "bill_not_synced" }, { status: 404 });
-    if (!bill.paymentProfile?.authorized) {
+    if (!isValidPaymentProfile(bill.paymentProfile)) {
       return NextResponse.json({ error: "payment_profile_required" }, { status: 422 });
     }
 
@@ -40,6 +42,7 @@ export async function POST(request: Request) {
     const payment: Payment = {
       id: paymentId(),
       billId: bill.id,
+      billShareId: bill.shareId,
       participantId,
       amount: summary.amount,
       serviceFeeAmount: summary.serviceFeePerParticipant,
@@ -53,9 +56,16 @@ export async function POST(request: Request) {
       paymentId: payment.id,
       amount: payment.totalAmount,
       billId: bill.id,
+      billShareId: bill.shareId,
       participantId,
       description: `Mesa Cobrada - ${bill.title}`,
       receiverName: bill.paymentProfile.holderName,
+      recipientAccount: {
+        holder_id: normalizeChileanHolderId(bill.paymentProfile.holderId),
+        number: bill.paymentProfile.accountNumber,
+        type: bill.paymentProfile.accountType as "checking_account" | "sight_account",
+        institution_id: bill.paymentProfile.institutionId,
+      },
     });
 
     const saved = await saveServerPayment({
@@ -65,8 +75,15 @@ export async function POST(request: Request) {
       fintocRedirectUrl: session.redirect_url,
       updatedAt: new Date().toISOString(),
     });
+    await savePublicBill({
+      ...bill,
+      participants: bill.participants.map((participant) =>
+        participant.id === participantId ? { ...participant, status: "payment_pending" } : participant,
+      ),
+      updatedAt: new Date().toISOString(),
+    });
 
-    console.info("Redirect URL", { payment_id: saved.id, redirect_url: saved.fintocRedirectUrl });
+    console.info("Checkout listo", { payment_id: saved.id });
 
     return NextResponse.json({
       payment: saved,
@@ -81,16 +98,15 @@ export async function POST(request: Request) {
         {
           error: "fintoc_checkout_error",
           status: error.status,
-          detail: error.body.slice(0, 600),
         },
         { status: 502 },
       );
     }
     if (error instanceof FintocConfigError) {
-      return NextResponse.json({ error: "fintoc_config_error", detail: error.message }, { status: 500 });
+      return NextResponse.json({ error: "fintoc_config_error" }, { status: 500 });
     }
     if (error instanceof SupabasePaymentStoreError) {
-      return NextResponse.json({ error: "supabase_payment_persistence_failed", detail: error.detail }, { status: 500 });
+      return NextResponse.json({ error: "supabase_payment_persistence_failed" }, { status: 500 });
     }
     return NextResponse.json({ error: "checkout_session_failed" }, { status: 500 });
   }

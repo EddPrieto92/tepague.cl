@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyFintocWebhookSignature } from "@/lib/fintoc";
 import { findServerPayment, markWebhookProcessed, updateServerPaymentStatus } from "@/lib/server-payment-store";
 import type { PaymentStatus } from "@/lib/types";
+import { updatePublicParticipantStatus } from "@/lib/public-bill-store";
 
 type FintocEvent = {
   id: string;
@@ -21,6 +22,9 @@ type FintocEvent = {
 function statusForEvent(type: string): PaymentStatus | null {
   if (type === "payment_intent.succeeded") return "succeeded";
   if (type === "payment_intent.failed") return "failed";
+  if (type === "payment_intent.rejected") return "failed";
+  if (type === "payment_intent.pending") return "pending";
+  if (type === "payment_intent.expired") return "expired";
   if (type === "payment_intent.requires_action") return "requires_action";
   if (type === "checkout_session.expired") return "expired";
   return null;
@@ -63,6 +67,10 @@ export async function POST(request: Request) {
     fintocPaymentIntentId: paymentIntentId ?? payment.fintocPaymentIntentId,
     rawWebhookEvent: event,
   });
+
+  if (nextPayment.status === "succeeded") await updatePublicParticipantStatus(nextPayment.billId, nextPayment.participantId, "paid");
+  if (nextPayment.status === "failed") await updatePublicParticipantStatus(nextPayment.billId, nextPayment.participantId, "failed");
+  if (nextPayment.status === "expired") await updatePublicParticipantStatus(nextPayment.billId, nextPayment.participantId, "expired");
 
   if (nextPayment.status === "succeeded") console.info("Pago confirmado", { payment_id: nextPayment.id });
   if (nextPayment.status === "failed") console.info("Pago fallido", { payment_id: nextPayment.id });

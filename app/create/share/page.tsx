@@ -4,19 +4,20 @@ import { useEffect, useState } from "react";
 import { FunSummaryCard } from "@/components/FunSummaryCard";
 import { OrganizerDashboard } from "@/components/OrganizerDashboard";
 import { ShareBill } from "@/components/ShareBill";
-import { AppShell, TopBar } from "@/components/ui";
-import { getBillByShareId } from "@/lib/storage";
-import type { Bill } from "@/lib/types";
+import { AppShell, Card, TopBar } from "@/components/ui";
+import { usePublicBill } from "@/lib/use-public-bill";
+import { ReceiptPreview } from "@/components/ReceiptPreview";
 
 export default function SharePage() {
-  const [bill, setBill] = useState<Bill | null>(null);
+  const [shareId, setShareId] = useState("");
+  const { bill, error } = usePublicBill(shareId, 3000);
 
   useEffect(() => {
     const shareId = window.sessionStorage.getItem("mesa-cobrada:active-bill") ?? "mesa-viernes";
-    setBill(getBillByShareId(shareId) ?? null);
+    setShareId(shareId);
   }, []);
 
-  if (!bill) return null;
+  if (!bill) return <AppShell><TopBar title="Compartir" href="/create/payment" />{error ? <Card className="text-sm font-bold text-tomato">{error}</Card> : null}</AppShell>;
 
   return (
     <AppShell>
@@ -24,6 +25,7 @@ export default function SharePage() {
       <div className="space-y-4">
         <ShareBill bill={bill} />
         <OrganizerDashboard bill={bill} />
+        <ReceiptPreview imageUrl={bill.imageUrl} />
         <FunSummaryCard bill={bill} />
       </div>
     </AppShell>

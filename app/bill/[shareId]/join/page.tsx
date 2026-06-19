@@ -1,26 +1,31 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ItemClaimList } from "@/components/ItemClaimList";
 import { ParticipantEntry } from "@/components/ParticipantEntry";
-import { AppShell, TopBar } from "@/components/ui";
-import { getBillByShareId, getRememberedParticipant } from "@/lib/storage";
-import type { Bill } from "@/lib/types";
+import { AppShell, Card, TopBar } from "@/components/ui";
+import { getRememberedParticipant } from "@/lib/storage";
+import { usePublicBill } from "@/lib/use-public-bill";
 
 export default function JoinPage() {
   const params = useParams<{ shareId: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [bill, setBill] = useState<Bill | null>(null);
+  const { bill, error, loading } = usePublicBill(params.shareId);
   const [participantId, setParticipantId] = useState<string | null>(null);
 
   useEffect(() => {
-    const nextBill = getBillByShareId(params.shareId) ?? null;
-    setBill(nextBill);
     setParticipantId(searchParams.get("participantId") ?? getRememberedParticipant(params.shareId));
   }, [params.shareId, searchParams]);
 
-  if (!bill) return null;
+  useEffect(() => {
+    if (!bill || !participantId) return;
+    const participant = bill.participants.find((candidate) => candidate.id === participantId);
+    if (participant && participant.status !== "selecting") router.replace(`/bill/${bill.shareId}/pay/${participantId}`);
+  }, [bill, participantId, router]);
+
+  if (!bill) return <AppShell><TopBar title="Participante" href={`/bill/${params.shareId}`} /><Card className="text-sm font-bold">{error || (loading ? "Cargando cuenta…" : "Cuenta no disponible.")}</Card></AppShell>;
 
   return (
     <AppShell>
