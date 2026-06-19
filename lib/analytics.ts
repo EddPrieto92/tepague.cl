@@ -16,7 +16,7 @@ export function trackEvent(eventName: string, payload: AnalyticsPayload = {}) {
   if (typeof window === "undefined") return;
 
   const safePayload = {
-    app_version: process.env.NEXT_PUBLIC_APP_VERSION ?? "1.2.1",
+    app_version: process.env.NEXT_PUBLIC_APP_VERSION ?? "1.2.2",
     ...payload,
   };
 

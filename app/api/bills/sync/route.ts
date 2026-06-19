@@ -31,10 +31,15 @@ export async function POST(request: Request) {
       }
     }
     syncBillSnapshot(nextBill);
-    const saved = await savePublicBill(nextBill);
+    const requirePublicStorage = request.headers.get("x-require-public-storage") === "true" || Boolean(participantId);
+    const saved = await savePublicBill(nextBill, { requirePublicStorage });
     return NextResponse.json({ ok: true, ...saved });
   } catch (error) {
-    if (error instanceof PublicBillStoreError) return NextResponse.json({ error: "public_bill_save_failed" }, { status: 503 });
+    if (error instanceof PublicBillStoreError) {
+      return NextResponse.json({
+        error: error.reason === "schema_missing" ? "public_storage_unavailable" : "public_bill_save_failed",
+      }, { status: 503 });
+    }
     return NextResponse.json({ error: "bill_save_failed" }, { status: 500 });
   }
 }

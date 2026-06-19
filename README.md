@@ -2,6 +2,17 @@
 
 App mobile-first para cargar una boleta, dividir consumos y cobrar cada parte mediante Fintoc.
 
+## v1.2.2
+
+Parche de estabilidad para producción:
+
+- La imagen local de la boleta ya no se envía como base64 en cada sincronización.
+- La creación y revisión continúan con cache local si la persistencia pública está temporalmente caída.
+- Generar el enlace exige una escritura pública real, evitando compartir mesas inexistentes.
+- Los errores de esquema o disponibilidad se informan sin exponer credenciales ni detalles sensibles.
+
+La persistencia pública requiere aplicar `supabase/migrations/20260619120000_public_bills_v121.sql` en el proyecto Supabase usado por producción.
+
 ## v1.2.1
 
 - Cuenta pública persistida por `shareId` mediante la API y Supabase; `localStorage` queda como caché.

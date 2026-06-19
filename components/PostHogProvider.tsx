@@ -15,7 +15,7 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
       loaded: (client) => {
         client.register({
           app_name: "mesa-cobrada",
-          app_version: process.env.NEXT_PUBLIC_APP_VERSION ?? "1.2.0",
+          app_version: process.env.NEXT_PUBLIC_APP_VERSION ?? "1.2.2",
         });
       },
     });

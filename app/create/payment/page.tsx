@@ -59,7 +59,7 @@ export default function PaymentPage() {
             setError("");
             try {
               const nextBill = upsertBill({ ...bill, status: "open", serviceFeeTotal, serviceFeePerParticipant, ...validation });
-              await persistPublicBill(nextBill);
+              await persistPublicBill(nextBill, undefined, { requirePublicStorage: true });
               trackEvent("bill_shared", { expected_participant_count: expectedCount, missing_amount: validation.missingAmount });
               window.sessionStorage.setItem("mesa-cobrada:active-bill", nextBill.shareId);
               router.push("/create/share");

@@ -1,10 +1,14 @@
 import type { Bill, ParticipantStatus } from "./types";
 import { supabaseAdmin } from "./supabase";
+import { publicBillPayload } from "./public-bill-payload";
 
 export class PublicBillStoreError extends Error {
-  constructor(message: string) {
+  reason: "schema_missing" | "unavailable";
+
+  constructor(message: string, reason: "schema_missing" | "unavailable" = "unavailable") {
     super(message);
     this.name = "PublicBillStoreError";
+    this.reason = reason;
   }
 }
 
@@ -24,6 +28,7 @@ function remember(bill: Bill) {
 }
 
 function billRow(bill: Bill) {
+  const publicBill = publicBillPayload(bill);
   return {
     id: bill.id,
     share_id: bill.shareId,
@@ -33,18 +38,41 @@ function billRow(bill: Bill) {
     receipt_total: bill.receiptTotal ?? null,
     entered_total: bill.enteredTotal,
     missing_amount: bill.missingAmount,
-    snapshot: bill,
+    snapshot: publicBill,
     created_at: bill.createdAt,
     updated_at: bill.updatedAt,
   };
 }
 
-export async function savePublicBill(bill: Bill) {
+function isMissingPublicSchema(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  const message = error.message?.toLowerCase() ?? "";
+  return error.code === "42P01"
+    || error.code === "PGRST205"
+    || message.includes("schema cache")
+    || message.includes("relation")
+    || message.includes("does not exist");
+}
+
+export async function savePublicBill(bill: Bill, options: { requirePublicStorage?: boolean } = {}) {
   remember(bill);
-  if (!supabaseAdmin) return { bill, storage: "memory" as const };
+  if (!supabaseAdmin) {
+    if (options.requirePublicStorage) {
+      throw new PublicBillStoreError("La persistencia pública no está configurada.");
+    }
+    return { bill, storage: "memory" as const, warning: "public_storage_unavailable" as const };
+  }
 
   const { error: billError } = await supabaseAdmin.from("bills").upsert(billRow(bill));
-  if (billError) throw new PublicBillStoreError("No se pudo guardar la cuenta pública.");
+  if (billError) {
+    if (options.requirePublicStorage) {
+      throw new PublicBillStoreError(
+        "No se pudo guardar la cuenta pública.",
+        isMissingPublicSchema(billError) ? "schema_missing" : "unavailable",
+      );
+    }
+    return { bill, storage: "memory" as const, warning: "public_storage_unavailable" as const };
+  }
 
   const itemRows = bill.items.map((item) => ({
     id: item.id,
@@ -96,12 +124,14 @@ export async function savePublicBill(bill: Bill) {
   }
 
   const parentResults = await Promise.all(parentOperations);
-  if (parentResults.some((result) => result.error)) throw new PublicBillStoreError("No se pudo guardar el detalle público de la cuenta.");
+  const detailWarning = parentResults.some((result) => result.error);
   if (claimRows.length) {
     const { error: claimError } = await supabaseAdmin.from("participant_items").upsert(claimRows);
-    if (claimError) throw new PublicBillStoreError("No se pudo guardar la selección de productos.");
+    if (claimError) return { bill, storage: "supabase" as const, warning: "public_detail_sync_failed" as const };
   }
-  return { bill, storage: "supabase" as const };
+  return detailWarning
+    ? { bill, storage: "supabase" as const, warning: "public_detail_sync_failed" as const }
+    : { bill, storage: "supabase" as const };
 }
 
 export async function getPublicBill(identifier: string) {
@@ -112,7 +142,10 @@ export async function getPublicBill(identifier: string) {
       .select("snapshot")
       .or(`id.eq.${identifier},share_id.eq.${identifier}`)
       .maybeSingle();
-    if (error) throw new PublicBillStoreError("No se pudo cargar la cuenta pública.");
+    if (error) {
+      if (isMissingPublicSchema(error)) return memoryBills().get(identifier) ?? null;
+      throw new PublicBillStoreError("No se pudo cargar la cuenta pública.");
+    }
     if (data?.snapshot) {
       const bill = data.snapshot as Bill;
       remember(bill);
