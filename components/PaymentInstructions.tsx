@@ -87,7 +87,7 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
   if (!participant) return null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       <Card>
         <p className="text-sm font-bold text-ink/60">Total a pagar</p>
         <h1 className="mt-2 text-4xl font-black">{formatCLP(summary.totalAmount)}</h1>
@@ -115,9 +115,6 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
         </dl>
       </Card>
 
-      <Button className="w-full" disabled={isPaying || !bill.paymentProfile?.authorized} onClick={payWithFintoc} type="button">
-        {isPaying ? <Loader2 className="animate-spin" size={18} /> : <ExternalLink size={18} />} Pagar ahora
-      </Button>
       {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
 
       <details className="rounded-lg border-2 border-ink bg-white p-4 shadow-soft">
@@ -156,7 +153,14 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
         <button className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border-2 border-ink bg-paper px-4 text-sm font-black" onClick={copyTransferData} type="button"><Copy size={18} /> {copied ? "Datos copiados" : "Copiar datos"}</button>
       </details>
 
-      {manualFallbackEnabled ? <Button className="w-full" onClick={paid} type="button"><CheckCircle2 size={18} /> Ya transferí (fallback)</Button> : null}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto grid max-w-md gap-3">
+          <Button className="w-full" disabled={isPaying || !bill.paymentProfile?.authorized} onClick={payWithFintoc} type="button">
+            {isPaying ? <Loader2 className="animate-spin" size={18} /> : <ExternalLink size={18} />} Pagar ahora
+          </Button>
+          {manualFallbackEnabled ? <Button className="w-full" onClick={paid} type="button"><CheckCircle2 size={18} /> Ya transferí (fallback)</Button> : null}
+        </div>
+      </div>
     </div>
   );
 }

@@ -28,6 +28,9 @@ export function ItemClaimList({ bill, participantId }: Props) {
 
   const breakdown = calculateParticipantBreakdown(currentBill, participantId);
   const total = breakdown.total;
+  const consumptionTotal = Math.round(breakdown.consumption + breakdown.adjustments);
+  const tipTotal = Math.round(breakdown.tip);
+  const claimableItems = currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded" && item.paidByParticipantId !== organizerParticipantId);
 
   useEffect(() => {
     currentBillRef.current = currentBill;
@@ -116,57 +119,73 @@ export function ItemClaimList({ bill, participantId }: Props) {
   if (!participant) return null;
 
   return (
-    <div className="space-y-4">
-      <Card className="bg-ink text-paper">
-        <p className="text-sm font-bold text-paper/70">Hola, {participant.name}</p>
-        <div className="mt-2 flex items-end justify-between">
-          <h1 className="text-3xl font-black">Tu parte</h1>
-          <span className="text-2xl font-black">{formatCLP(total)}</span>
-        </div>
-      </Card>
+    <div className="flex min-h-[calc(100svh-6rem)] flex-col">
+      <div className="sticky top-[4.25rem] z-30 -mx-1 bg-paper/95 px-1 pb-3 pt-1 backdrop-blur">
+        <Card>
+          <p className="text-sm font-bold text-ink/60">Hola, {participant.name}</p>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <h1 className="text-3xl font-black">Tu parte</h1>
+            <span className="text-2xl font-black">{formatCLP(total)}</span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-lg bg-paper p-3">
+              <p className="font-bold text-ink/55">Consumo</p>
+              <p className="mt-1 font-black">{formatCLP(consumptionTotal)}</p>
+            </div>
+            <div className="rounded-lg bg-paper p-3">
+              <p className="font-bold text-ink/55">Propina</p>
+              <p className="mt-1 font-black">{formatCLP(tipTotal)}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
 
-      {currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded" && item.paidByParticipantId !== organizerParticipantId).map((item) => {
-        const value = claimedQuantity(item.id);
-        const max = Math.max(0, remainingStock(item.id, item.quantity) + value);
-        const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
-        const availability = calculateItemClaimSummary(currentBill, item);
-        return (
-          <Card key={item.id}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black">{item.name}</h2>
-                <p className="text-sm font-bold text-ink/60">{formatCLP(item.unitPrice)} c/u</p>
+      <div className="flex-1 space-y-4 overflow-y-auto pb-40">
+        {claimableItems.map((item) => {
+          const value = claimedQuantity(item.id);
+          const max = Math.max(0, remainingStock(item.id, item.quantity) + value);
+          const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
+          const availability = calculateItemClaimSummary(currentBill, item);
+          return (
+            <Card key={item.id}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black">{item.name}</h2>
+                  <p className="text-sm font-bold text-ink/60">{formatCLP(item.unitPrice)} c/u</p>
+                </div>
+                <span className="rounded-full bg-paper px-3 py-1 text-xs font-black">Disponible: {Math.max(0, Math.round(availability.remainingQuantity + value))}</span>
               </div>
-              <span className="rounded-full bg-paper px-3 py-1 text-xs font-black">Disponible: {Math.max(0, Math.round(availability.remainingQuantity + value))}</span>
-            </div>
-            <p className="mt-2 text-xs font-bold text-ink/55">Ya reclamaste: {value}</p>
-            <div className="mt-3">
-              {splitMode === "shared_by_claimants" ? (
-                <SharedItemToggle checked={value > 0} onChange={(checked) => setItem(item.id, checked ? 1 : 0)} />
-              ) : splitMode === "split_all" ? (
-                <p className="rounded-lg bg-limewash p-3 text-sm font-black">Se divide automáticamente entre todos.</p>
-              ) : splitMode === "invited_by" ? (
-                item.paidByParticipantId && item.paidByParticipantId !== participantId
-                  ? <p className="rounded-lg bg-paper p-3 text-sm font-black">Este producto lo paga otra persona.</p>
-                  : <SharedItemToggle checked={item.paidByParticipantId === participantId} onChange={(checked) => setInvitedPayer(item.id, checked)} label="Yo invito este producto" />
-              ) : (
-                <QuantitySelector value={value} max={max} onChange={(next) => setItem(item.id, next)} />
-              )}
-            </div>
-          </Card>
-        );
-      })}
+              <p className="mt-2 text-xs font-bold text-ink/55">Ya reclamaste: {value}</p>
+              <div className="mt-3">
+                {splitMode === "shared_by_claimants" ? (
+                  <SharedItemToggle checked={value > 0} onChange={(checked) => setItem(item.id, checked ? 1 : 0)} />
+                ) : splitMode === "split_all" ? (
+                  <p className="rounded-lg bg-limewash p-3 text-sm font-black">Se divide automáticamente entre todos.</p>
+                ) : splitMode === "invited_by" ? (
+                  item.paidByParticipantId && item.paidByParticipantId !== participantId
+                    ? <p className="rounded-lg bg-paper p-3 text-sm font-black">Este producto lo paga otra persona.</p>
+                    : <SharedItemToggle checked={item.paidByParticipantId === participantId} onChange={(checked) => setInvitedPayer(item.id, checked)} label="Yo invito este producto" />
+                ) : (
+                  <QuantitySelector value={value} max={max} onChange={(next) => setItem(item.id, next)} />
+                )}
+              </div>
+            </Card>
+          );
+        })}
 
-      {items.length === 0 && total <= 0 ? <p className="rounded-lg bg-paper p-3 text-sm font-bold">Aún no has seleccionado productos. Selecciona lo que consumiste para calcular tu deuda.</p> : null}
-      {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
+        {items.length === 0 && total <= 0 ? <p className="rounded-lg bg-paper p-3 text-sm font-bold">Aún no has seleccionado productos. Selecciona lo que consumiste para calcular tu deuda.</p> : null}
+      </div>
 
-      <div className="grid gap-3">
-        <Button disabled={items.length === 0 && total <= 0} onClick={confirm} type="button">
-          Confirmar seleccion
-        </Button>
-        <SecondaryButton onClick={() => router.push(`/bill/${bill.shareId}`)} type="button">
-          Volver
-        </SecondaryButton>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto grid max-w-md gap-3">
+          {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
+          <Button disabled={items.length === 0 && total <= 0} onClick={confirm} type="button">
+            Confirmar seleccion
+          </Button>
+          <SecondaryButton onClick={() => router.push(`/bill/${bill.shareId}`)} type="button">
+            Volver
+          </SecondaryButton>
+        </div>
       </div>
     </div>
   );

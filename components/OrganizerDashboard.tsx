@@ -1,9 +1,13 @@
+"use client";
+
 import { Check, Clock, UsersRound } from "lucide-react";
+import { useState } from "react";
 import type { Bill } from "@/lib/types";
 import { calculateDashboard, calculateItemClaimSummary, formatCLP } from "@/lib/calculations";
 import { Card } from "./ui";
 
 export function OrganizerDashboard({ bill }: { bill: Bill }) {
+  const [productTab, setProductTab] = useState<"pending" | "paid">("pending");
   const dashboard = calculateDashboard(bill);
   const accountTotal = bill.total || (bill.receiptSubtotal ?? bill.subtotal) + bill.tip;
   const totalMissing = Math.max(0, accountTotal - dashboard.paidTotal);
@@ -83,31 +87,50 @@ export function OrganizerDashboard({ bill }: { bill: Bill }) {
       </Card>
 
       <Card>
-        <h2 className="text-lg font-black">Productos cubiertos</h2>
-        <div className="mt-3 divide-y-2 divide-ink/10">
-          {claimedItems.length === 0 ? <p className="py-4 text-sm font-bold text-ink/60">Aún no hay productos cubiertos.</p> : claimedItems.map(({ item, summary }) => (
-            <div className="flex items-center justify-between gap-3 py-3" key={item.id}>
-              <div>
-                <p className="font-black">{item.name}</p>
-                <p className="text-xs font-bold text-ink/55">
-                  Cubierto: {Number(summary.claimedQuantity.toFixed(2))} por {participantNamesForItem(item.id, item.paidByParticipantId)}
-                </p>
-              </div>
-              <p className="font-black">{formatCLP(summary.claimedAmount)}</p>
-            </div>
-          ))}
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black">Productos</h2>
+          <div className="grid grid-cols-2 rounded-lg border-2 border-ink bg-white p-1 text-xs font-black">
+            <button
+              className={productTab === "pending" ? "rounded-md bg-ink px-3 py-2 text-paper" : "rounded-md px-3 py-2 text-ink"}
+              onClick={() => setProductTab("pending")}
+              type="button"
+            >
+              Faltante
+            </button>
+            <button
+              className={productTab === "paid" ? "rounded-md bg-ink px-3 py-2 text-paper" : "rounded-md px-3 py-2 text-ink"}
+              onClick={() => setProductTab("paid")}
+              type="button"
+            >
+              Pagado
+            </button>
+          </div>
         </div>
-      </Card>
-
-      <Card>
-        <h2 className="text-lg font-black">Faltan por reclamar</h2>
         <div className="mt-3 divide-y-2 divide-ink/10">
-          {dashboard.missingItems.length === 0 ? <p className="py-4 text-sm font-bold text-ink/60">Todos los productos están cubiertos.</p> : dashboard.missingItems.map((item) => (
-            <div className="flex items-center justify-between gap-3 py-3" key={item.itemId}>
-              <div><p className="font-black">{item.name}</p><p className="text-xs font-bold text-ink/55">Cantidad faltante: {Number(item.remainingQuantity.toFixed(2))}</p></div>
-              <p className="font-black text-tomato">{formatCLP(item.remainingAmount)}</p>
-            </div>
-          ))}
+          {productTab === "pending" ? (
+            dashboard.missingItems.length === 0 ? (
+              <p className="py-4 text-sm font-bold text-ink/60">Todos los productos están cubiertos.</p>
+            ) : dashboard.missingItems.map((item) => (
+              <div className="flex items-center justify-between gap-3 py-3" key={item.itemId}>
+                <div><p className="font-black">{item.name}</p><p className="text-xs font-bold text-ink/55">Cantidad faltante: {Number(item.remainingQuantity.toFixed(2))}</p></div>
+                <p className="font-black text-tomato">{formatCLP(item.remainingAmount)}</p>
+              </div>
+            ))
+          ) : (
+            claimedItems.length === 0 ? (
+              <p className="py-4 text-sm font-bold text-ink/60">Aún no hay productos pagados.</p>
+            ) : claimedItems.map(({ item, summary }) => (
+              <div className="flex items-center justify-between gap-3 py-3" key={item.id}>
+                <div>
+                  <p className="font-black">{item.name}</p>
+                  <p className="text-xs font-bold text-ink/55">
+                    Cubierto: {Number(summary.claimedQuantity.toFixed(2))} por {participantNamesForItem(item.id, item.paidByParticipantId)}
+                  </p>
+                </div>
+                <p className="font-black">{formatCLP(summary.claimedAmount)}</p>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </div>

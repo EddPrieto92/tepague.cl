@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { FunSummaryCard } from "@/components/FunSummaryCard";
 import { OrganizerDashboard } from "@/components/OrganizerDashboard";
 import { AppShell, Card, TopBar } from "@/components/ui";
 import { formatCLP } from "@/lib/calculations";
@@ -41,7 +40,6 @@ export default function BillPage() {
 
         <OrganizerDashboard bill={bill} />
         <ReceiptPreview imageUrl={bill.imageUrl} />
-        <FunSummaryCard bill={bill} />
       </div>
     </AppShell>
   );
