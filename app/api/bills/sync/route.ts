@@ -36,8 +36,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ...saved });
   } catch (error) {
     if (error instanceof PublicBillStoreError) {
+      const errorCode =
+        error.reason === "not_configured"
+          ? "public_storage_not_configured"
+          : error.reason === "schema_missing"
+            ? "public_storage_schema_missing"
+            : "public_bill_save_failed";
       return NextResponse.json({
-        error: error.reason === "schema_missing" ? "public_storage_unavailable" : "public_bill_save_failed",
+        error: errorCode,
+        reason: error.reason,
       }, { status: 503 });
     }
     return NextResponse.json({ error: "bill_save_failed" }, { status: 500 });

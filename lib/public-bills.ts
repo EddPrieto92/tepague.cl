@@ -26,10 +26,16 @@ export async function persistPublicBill(
     },
     body: JSON.stringify(publicBillPayload(bill)),
   });
-  const data = (await response.json().catch(() => ({}))) as { bill?: Bill; error?: string };
+  const data = (await response.json().catch(() => ({}))) as { bill?: Bill; error?: string; reason?: string };
   if (!response.ok) {
+    if (data.error === "public_storage_not_configured") {
+      throw new Error("No pudimos publicar la mesa porque falta configurar la persistencia pública en producción.");
+    }
+    if (data.error === "public_storage_schema_missing") {
+      throw new Error("No pudimos publicar la mesa porque falta aplicar la migración de la base pública.");
+    }
     if (data.error === "public_storage_unavailable") {
-      throw new Error("No pudimos publicar la mesa porque el servicio de sincronización no está disponible. Intenta nuevamente en unos minutos.");
+      throw new Error("No pudimos publicar la mesa porque el servicio de sincronización no está disponible.");
     }
     throw new Error("No pudimos guardar la cuenta. Revisa tu conexión e intenta nuevamente.");
   }

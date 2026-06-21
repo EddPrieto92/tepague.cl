@@ -3,13 +3,23 @@ import { supabaseAdmin } from "./supabase";
 import { publicBillPayload } from "./public-bill-payload";
 
 export class PublicBillStoreError extends Error {
-  reason: "schema_missing" | "unavailable";
+  reason: "not_configured" | "schema_missing" | "unavailable";
 
-  constructor(message: string, reason: "schema_missing" | "unavailable" = "unavailable") {
+  constructor(message: string, reason: "not_configured" | "schema_missing" | "unavailable" = "unavailable") {
     super(message);
     this.name = "PublicBillStoreError";
     this.reason = reason;
   }
+}
+
+function logPublicBillStoreError(context: string, error: { code?: string; message?: string; details?: string; hint?: string } | null) {
+  if (!error) return;
+  console.error("[public-bills]", context, {
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+  });
 }
 
 declare global {
@@ -58,13 +68,14 @@ export async function savePublicBill(bill: Bill, options: { requirePublicStorage
   remember(bill);
   if (!supabaseAdmin) {
     if (options.requirePublicStorage) {
-      throw new PublicBillStoreError("La persistencia pública no está configurada.");
+      throw new PublicBillStoreError("La persistencia pública no está configurada.", "not_configured");
     }
     return { bill, storage: "memory" as const, warning: "public_storage_unavailable" as const };
   }
 
   const { error: billError } = await supabaseAdmin.from("bills").upsert(billRow(bill));
   if (billError) {
+    logPublicBillStoreError("bills_upsert_failed", billError);
     if (options.requirePublicStorage) {
       throw new PublicBillStoreError(
         "No se pudo guardar la cuenta pública.",
@@ -106,7 +117,7 @@ export async function savePublicBill(bill: Bill, options: { requirePublicStorage
     })),
   );
 
-  const parentOperations: Array<PromiseLike<{ error: { message: string } | null }>> = [];
+  const parentOperations: Array<PromiseLike<{ error: { code?: string; message?: string; details?: string; hint?: string } | null }>> = [];
   if (itemRows.length) parentOperations.push(supabaseAdmin.from("bill_items").upsert(itemRows));
   if (participantRows.length) parentOperations.push(supabaseAdmin.from("participants").upsert(participantRows));
   if (bill.paymentProfile) {
@@ -124,10 +135,14 @@ export async function savePublicBill(bill: Bill, options: { requirePublicStorage
   }
 
   const parentResults = await Promise.all(parentOperations);
+  parentResults.forEach((result, index) => logPublicBillStoreError(`detail_upsert_failed_${index}`, result.error));
   const detailWarning = parentResults.some((result) => result.error);
   if (claimRows.length) {
     const { error: claimError } = await supabaseAdmin.from("participant_items").upsert(claimRows);
-    if (claimError) return { bill, storage: "supabase" as const, warning: "public_detail_sync_failed" as const };
+    if (claimError) {
+      logPublicBillStoreError("participant_items_upsert_failed", claimError);
+      return { bill, storage: "supabase" as const, warning: "public_detail_sync_failed" as const };
+    }
   }
   return detailWarning
     ? { bill, storage: "supabase" as const, warning: "public_detail_sync_failed" as const }
