@@ -80,8 +80,10 @@ export type Bill = {
   id: string;
   shareId: string;
   title: string;
+  organizerName?: string;
   imageUrl?: string;
   ocrStatus?: OcrStatus;
+  ocrRawText?: string;
   expectedParticipantCount: number;
   receiptSubtotal?: number;
   receiptTip?: number;

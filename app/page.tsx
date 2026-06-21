@@ -8,7 +8,8 @@ export default function HomePage() {
       <section className="flex flex-1 flex-col justify-between gap-8 py-6">
         <div>
           <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-ink px-3 py-1 text-xs font-black text-paper">
-            <ReceiptText size={14} /> Mesa Cobrada
+            <ReceiptText size={14} />
+            Mesa Cobrada
           </div>
           <h1 className="text-5xl font-black leading-[0.95]">Sube la cuenta. Cada uno paga lo suyo.</h1>
           <p className="mt-4 text-lg font-semibold leading-snug text-ink/70">

@@ -3,6 +3,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { Bill, BillItem, SplitMode } from "@/lib/types";
 import { formatCLP } from "@/lib/calculations";
+import { getOrganizerParticipantId } from "@/lib/storage";
 import { Card, Input, Label, SecondaryButton } from "./ui";
 
 type Props = {
@@ -15,6 +16,8 @@ function uid() {
 }
 
 export function BillItemEditor({ bill, onChange }: Props) {
+  const organizerParticipantId = getOrganizerParticipantId(bill);
+
   function updateItem(itemId: string, patch: Partial<BillItem>) {
     onChange(
       bill.items.map((item) => {
@@ -36,6 +39,13 @@ export function BillItemEditor({ bill, onChange }: Props) {
     <div className="space-y-3">
       {bill.items.map((item) => (
         <Card key={item.id} className="space-y-3">
+          {(() => {
+            const isOwnConsumption = item.splitMode === "invited_by" && item.paidByParticipantId === organizerParticipantId;
+            const rawSplitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
+            const visibleSplitMode = isOwnConsumption || rawSplitMode === "excluded" ? "unit" : rawSplitMode;
+
+            return (
+              <>
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <Label>Producto</Label>
@@ -79,7 +89,7 @@ export function BillItemEditor({ bill, onChange }: Props) {
             </div>
             <select
               className="mt-2 min-h-11 w-full rounded-lg border-2 border-ink bg-white px-3 text-sm font-bold"
-              value={item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit")}
+              value={visibleSplitMode}
               onChange={(event) => {
                 const splitMode = event.target.value as SplitMode;
                 updateItem(item.id, { splitMode, isShared: splitMode === "shared_by_claimants", paidByParticipantId: splitMode === "invited_by" ? item.paidByParticipantId : undefined });
@@ -89,9 +99,8 @@ export function BillItemEditor({ bill, onChange }: Props) {
               <option value="shared_by_claimants">Compartido entre quienes lo marcan</option>
               <option value="split_all">Dividir entre todos</option>
               <option value="invited_by">Lo paga otra persona</option>
-              <option value="excluded">Excluir del cobro</option>
             </select>
-            {(item.splitMode ?? "unit") === "invited_by" ? (
+            {!isOwnConsumption && (item.splitMode ?? "unit") === "invited_by" ? (
               <select
                 className="mt-2 min-h-11 w-full rounded-lg border-2 border-ink bg-white px-3 text-sm font-bold"
                 value={item.paidByParticipantId ?? ""}
@@ -102,6 +111,26 @@ export function BillItemEditor({ bill, onChange }: Props) {
               </select>
             ) : null}
           </div>
+
+          <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border-2 border-ink bg-paper px-3 text-sm font-black">
+            <span>Consumo propio</span>
+            <input
+              checked={isOwnConsumption}
+              className="size-5 accent-ink"
+              type="checkbox"
+              onChange={(event) =>
+                updateItem(
+                  item.id,
+                  event.target.checked
+                    ? { splitMode: "invited_by", paidByParticipantId: organizerParticipantId, isShared: false }
+                    : { splitMode: "unit", paidByParticipantId: undefined, isShared: false },
+                )
+              }
+            />
+          </label>
+              </>
+            );
+          })()}
         </Card>
       ))}
 

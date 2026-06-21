@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Bill, ParticipantItem } from "@/lib/types";
 import { calculateItemClaimSummary, calculateParticipantBreakdown, formatCLP } from "@/lib/calculations";
-import { makeParticipantItem, updateParticipantItems, updateParticipantTipPreference } from "@/lib/storage";
+import { getOrganizerParticipantId, makeParticipantItem, updateParticipantItems } from "@/lib/storage";
 import { persistPublicBill } from "@/lib/public-bills";
 import { trackEvent } from "@/lib/analytics";
 import { Button, Card, SecondaryButton } from "./ui";
@@ -21,6 +21,7 @@ export function ItemClaimList({ bill, participantId }: Props) {
   const [currentBill, setCurrentBill] = useState(bill);
   const participant = currentBill.participants.find((candidate) => candidate.id === participantId);
   const items = participant?.items ?? [];
+  const organizerParticipantId = getOrganizerParticipantId(currentBill);
   const [error, setError] = useState("");
 
   const breakdown = calculateParticipantBreakdown(currentBill, participantId);
@@ -84,7 +85,7 @@ export function ItemClaimList({ bill, participantId }: Props) {
         </div>
       </Card>
 
-      {currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded").map((item) => {
+      {currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded" && item.paidByParticipantId !== organizerParticipantId).map((item) => {
         const value = claimedQuantity(item.id);
         const max = remainingStock(item.id, item.quantity) + value;
         const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
@@ -115,23 +116,6 @@ export function ItemClaimList({ bill, participantId }: Props) {
           </Card>
         );
       })}
-
-      <Card className="flex items-center justify-between gap-3">
-        <label className="flex items-center gap-3 text-sm font-black">
-          <input
-            checked={participant.includeTip !== false}
-            className="size-5 accent-ink"
-            type="checkbox"
-            onChange={(event) => {
-              const nextBill = updateParticipantTipPreference(currentBill, participantId, event.target.checked);
-              setCurrentBill(nextBill);
-              void persistPublicBill(nextBill, participantId).catch(() => setError("No pudimos guardar tu preferencia de propina."));
-            }}
-          />
-          Incluir propina
-        </label>
-        <span className="text-sm font-black">{formatCLP(breakdown.tip)}</span>
-      </Card>
 
       {items.length === 0 && total <= 0 ? <p className="rounded-lg bg-paper p-3 text-sm font-bold">Aún no has seleccionado productos. Selecciona lo que consumiste para calcular tu deuda.</p> : null}
       {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}

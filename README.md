@@ -16,7 +16,7 @@ La persistencia pública requiere aplicar `supabase/migrations/20260619120000_pu
 ## v1.2.1
 
 - Cuenta pública persistida por `shareId` mediante la API y Supabase; `localStorage` queda como caché.
-- Productos con reparto por unidad, compartido, entre todos, invitado o excluido.
+- Productos con reparto por unidad, compartido, entre todos, invitado o consumo propio del organizador.
 - Personas esperadas, fee anticipado, faltantes por producto y validación contra la boleta.
 - Cuenta receptora validada y enviada a Fintoc Direct Payments.
 - Selecciones recuperables y estados de participante/pago.

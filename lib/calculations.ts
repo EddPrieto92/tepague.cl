@@ -47,12 +47,13 @@ export function calculateBillValidation(bill: Bill) {
     discount: bill.discount,
     includeTip: bill.includeTipInTotal !== false,
   });
-  const receiptTotal = bill.receiptTotal || bill.total || enteredTotal;
+  const receiptSubtotal = bill.receiptSubtotal || (bill.receiptTotal && bill.receiptTip ? bill.receiptTotal - bill.receiptTip : 0);
+  const validationTarget = receiptSubtotal || bill.subtotal || enteredSubtotal;
   return {
     enteredSubtotal,
     enteredTip,
     enteredTotal,
-    missingAmount: receiptTotal - enteredTotal,
+    missingAmount: validationTarget - enteredSubtotal,
   };
 }
 

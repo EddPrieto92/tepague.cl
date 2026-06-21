@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Camera, ImagePlus, ReceiptText, ScanLine } from "lucide-react";
+import { AlertCircle, Camera, Clipboard, ImagePlus, ReceiptText, ScanLine } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
 import { Button, Card, Input, Label } from "./ui";
@@ -9,12 +9,14 @@ import { createBillFromTitle } from "@/lib/storage";
 import { persistPublicBill } from "@/lib/public-bills";
 import { prepareReceiptImage, recognizeReceiptImage, type OcrProgress, type ParsedReceipt } from "@/lib/receipt-ocr";
 import type { OcrStatus } from "@/lib/types";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 export function BillUpload() {
   const router = useRouter();
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("Mesa viernes");
+  const [organizerName, setOrganizerName] = useState("");
   const [imageName, setImageName] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [parsedReceipt, setParsedReceipt] = useState<ParsedReceipt | null>(null);
@@ -23,6 +25,7 @@ export function BillUpload() {
   const [error, setError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [ocrStatus, setOcrStatus] = useState<OcrStatus>("empty");
+  const [copiedText, setCopiedText] = useState(false);
 
   async function scanFile(file: File, source: "camera" | "gallery") {
     const startedAt = performance.now();
@@ -43,11 +46,13 @@ export function BillUpload() {
       const prepared = await prepareReceiptImage(file);
       setPreviewUrl(prepared.previewUrl);
       setOcrProgress({ status: "Leyendo texto", progress: 0.18 });
-      const receipt = await recognizeReceiptImage(prepared.ocrUrl, setOcrProgress);
+      const receipt = await recognizeReceiptImage(prepared.ocrUrls, setOcrProgress);
       setParsedReceipt(receipt);
       setOcrText(receipt.rawText);
-      const hasAnyData = receipt.items.length > 0 || receipt.subtotal > 0 || receipt.tip > 0 || receipt.total > 0 || receipt.rawText.trim().length >= 4;
-      const nextStatus: OcrStatus = receipt.items.length > 0 && receipt.total > 0 ? "success" : hasAnyData ? "partial" : "empty";
+      setCopiedText(false);
+      const hasText = receipt.rawText.trim().length >= 12;
+      const hasAnyData = hasText || receipt.items.length > 0 || receipt.subtotal > 0 || receipt.tip > 0 || receipt.total > 0;
+      const nextStatus: OcrStatus = receipt.items.length > 0 && (receipt.total > 0 || receipt.subtotal > 0) ? "success" : hasAnyData ? "partial" : "empty";
       setOcrStatus(nextStatus);
       trackEvent("receipt_ocr_completed", {
         source,
@@ -81,7 +86,7 @@ export function BillUpload() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      const bill = createBillFromTitle(title.trim() || "Mesa sin nombre", previewUrl, parsedReceipt?.items ?? [], parsedReceipt ?? undefined, ocrStatus);
+      const bill = createBillFromTitle(title.trim() || "Mesa sin nombre", organizerName.trim(), previewUrl, parsedReceipt?.items ?? [], parsedReceipt ?? undefined, ocrStatus);
       await persistPublicBill(bill);
       trackEvent("bill_created", {
         has_ocr: Boolean(parsedReceipt),
@@ -96,6 +101,15 @@ export function BillUpload() {
       setError(saveError instanceof Error ? saveError.message : "No pudimos guardar la mesa.");
     }
   }
+
+  async function copyOcrText() {
+    if (!ocrText) return;
+    const copied = await copyTextToClipboard(ocrText);
+    setCopiedText(copied);
+  }
+
+  const hasParsedItems = (parsedReceipt?.items.length ?? 0) > 0;
+  const hasDetectedText = ocrText.trim().length >= 12;
 
   return (
     <form className="space-y-4" onSubmit={submit}>
@@ -112,6 +126,11 @@ export function BillUpload() {
 
         <Label>Nombre mesa</Label>
         <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Cumple Nico" />
+
+        <div className="mt-4">
+          <Label>Tu nombre</Label>
+          <Input value={organizerName} onChange={(event) => setOrganizerName(event.target.value)} placeholder="Edu" />
+        </div>
 
         <div className="mt-4">
           <Label>Foto boleta</Label>
@@ -177,11 +196,22 @@ export function BillUpload() {
         ) : null}
 
         {!isScanning && parsedReceipt && ocrStatus !== "empty" ? (
-          <div className="mt-4 rounded-lg border-2 border-ink bg-limewash p-3">
+          <div className={`mt-4 rounded-lg border-2 border-ink p-3 ${ocrStatus === "success" ? "bg-limewash" : "bg-white"}`}>
             <p className="text-sm font-black">
-              {ocrStatus === "success" ? `Detectamos ${parsedReceipt.items.length} productos.` : "Detectamos algunos datos, revísalos antes de compartir."}
+              {ocrStatus === "success"
+                ? `Detectamos ${parsedReceipt.items.length} productos.`
+                : hasParsedItems
+                  ? `Detectamos ${parsedReceipt.items.length} productos, pero falta revisar la cuenta.`
+                  : "Detectamos texto, pero no productos claros."}
             </p>
-            <p className="mt-1 text-xs font-bold text-ink/65">Puedes corregir nombres, cantidades y precios.</p>
+            <p className="mt-1 text-xs font-bold text-ink/65">
+              {hasParsedItems ? "Puedes corregir nombres, cantidades y precios." : "Puedes crear la mesa y completar los productos en revisión."}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-black">
+              <span className="rounded-lg bg-paper p-2">Items {parsedReceipt.items.length}</span>
+              <span className="rounded-lg bg-paper p-2">Total {parsedReceipt.total > 0 ? "si" : "no"}</span>
+              <span className="rounded-lg bg-paper p-2">Texto {hasDetectedText ? "si" : "no"}</span>
+            </div>
           </div>
         ) : null}
 
@@ -201,13 +231,25 @@ export function BillUpload() {
         {ocrText ? (
           <details className="mt-4 rounded-lg border-2 border-ink bg-paper p-3">
             <summary className="cursor-pointer text-sm font-black">Texto detectado</summary>
-            <pre className="mt-3 max-h-40 overflow-auto whitespace-pre-wrap text-xs font-bold text-ink/70">{ocrText}</pre>
+            <button
+              className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border-2 border-ink bg-white px-3 text-sm font-black"
+              type="button"
+              onClick={copyOcrText}
+            >
+              <Clipboard size={16} /> {copiedText ? "Texto copiado" : "Copiar texto para revisar"}
+            </button>
+            {!copiedText ? <p className="mt-2 text-xs font-bold text-ink/60">Si el copiado falla, selecciona el texto de abajo.</p> : null}
+            <textarea
+              className="mt-3 max-h-44 min-h-32 w-full resize-y rounded-lg border-2 border-ink bg-white p-3 text-xs font-bold text-ink/70"
+              readOnly
+              value={ocrText}
+            />
           </details>
         ) : null}
       </Card>
 
       <Button className="w-full" disabled={isScanning} type="submit">
-        {isScanning ? "Escaneando" : parsedReceipt && parsedReceipt.items.length > 0 ? "Revisar productos" : "Crear mesa manual"}
+        {isScanning ? "Escaneando" : hasParsedItems ? "Revisar productos" : hasDetectedText ? "Revisar y completar" : "Crear mesa manual"}
       </Button>
     </form>
   );

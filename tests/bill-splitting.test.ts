@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateDashboard, calculateParticipantBreakdown } from "../lib/calculations";
+import { calculateBillValidation, calculateDashboard, calculateParticipantBreakdown } from "../lib/calculations";
 import { billFixture, fixtureBuilders } from "./fixtures/bills";
 
 const { item, participant } = fixtureBuilders;
@@ -31,5 +31,45 @@ describe("real bill splitting scenarios", () => {
     const bill = billFixture(products, [participant("p1"), participant("p2")]);
     expect(calculateParticipantBreakdown(bill, "p1").consumption).toBe(10000);
     expect(calculateParticipantBreakdown(bill, "p2").consumption).toBe(0);
+  });
+
+  it("E: validates products against receipt subtotal even when tip is included in final total", () => {
+    const products = [item("elkika", { quantity: 1, unitPrice: 78000, totalPrice: 78000 })];
+    const bill = {
+      ...billFixture(products, [participant("p1")]),
+      receiptSubtotal: 78000,
+      receiptTip: 7800,
+      receiptTotal: 85800,
+      tip: 7800,
+      total: 85800,
+      includeTipInTotal: true,
+    };
+
+    expect(calculateBillValidation(bill)).toMatchObject({
+      enteredSubtotal: 78000,
+      enteredTip: 7800,
+      enteredTotal: 85800,
+      missingAmount: 0,
+    });
+  });
+
+  it("F: treats organizer own consumption as already claimed and paid", () => {
+    const organizer = participant("organizer_bill_fixture", [
+      { id: "own_claim", participantId: "organizer_bill_fixture", billItemId: "crudo", quantity: 1, amount: 10400 },
+    ]);
+    const products = [
+      item("crudo", { quantity: 1, unitPrice: 10400, totalPrice: 10400, splitMode: "invited_by", paidByParticipantId: organizer.id }),
+      item("bebida", { quantity: 1, unitPrice: 2500, totalPrice: 2500 }),
+    ];
+    const bill = {
+      ...billFixture(products, [{ ...organizer, status: "paid" }]),
+      tip: 1290,
+      total: 14190,
+    };
+    const dashboard = calculateDashboard(bill);
+
+    expect(dashboard.claimedTotal).toBe(10400);
+    expect(dashboard.missingClaimAmount).toBe(2500);
+    expect(dashboard.paidTotal).toBeGreaterThan(10400);
   });
 });

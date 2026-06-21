@@ -1,10 +1,15 @@
 import { Check, Clock, UsersRound } from "lucide-react";
 import type { Bill } from "@/lib/types";
-import { calculateDashboard, formatCLP } from "@/lib/calculations";
+import { calculateDashboard, calculateItemClaimSummary, formatCLP } from "@/lib/calculations";
 import { Card } from "./ui";
 
 export function OrganizerDashboard({ bill }: { bill: Bill }) {
   const dashboard = calculateDashboard(bill);
+  const accountTotal = bill.total || (bill.receiptSubtotal ?? bill.subtotal) + bill.tip;
+  const totalMissing = Math.max(0, accountTotal - dashboard.paidTotal);
+  const claimedItems = bill.items
+    .map((item) => ({ item, summary: calculateItemClaimSummary(bill, item) }))
+    .filter(({ summary }) => summary.claimedAmount > 0);
   const statusLabels = {
     selecting: "Seleccionando",
     confirmed: "Confirmado",
@@ -13,6 +18,20 @@ export function OrganizerDashboard({ bill }: { bill: Bill }) {
     failed: "Falló",
     expired: "Expiró",
   } as const;
+
+  function participantNamesForItem(itemId: string, paidByParticipantId?: string) {
+    const item = bill.items.find((candidate) => candidate.id === itemId);
+    if (item?.splitMode === "split_all") return "Dividido entre todos";
+
+    if (paidByParticipantId) {
+      return bill.participants.find((participant) => participant.id === paidByParticipantId)?.name ?? "Asignado";
+    }
+
+    const names = bill.participants
+      .filter((participant) => participant.items.some((claim) => claim.billItemId === itemId))
+      .map((participant) => participant.name);
+    return names.length ? names.join(", ") : "Sin asignar";
+  }
 
   return (
     <div className="space-y-4">
@@ -29,19 +48,18 @@ export function OrganizerDashboard({ bill }: { bill: Bill }) {
         </Card>
         <Card className="p-3">
           <Clock size={18} />
-          <p className="mt-2 text-xl font-black">{formatCLP(dashboard.pendingTotal)}</p>
-          <p className="text-[11px] font-bold uppercase text-ink/55">Pendiente</p>
+          <p className="mt-2 text-xl font-black">{formatCLP(totalMissing)}</p>
+          <p className="text-[11px] font-bold uppercase text-ink/55">Faltante</p>
         </Card>
       </div>
 
       <Card>
         <h2 className="text-lg font-black">Estado de la cuenta</h2>
         <dl className="mt-3 grid gap-2 text-sm">
-          <div className="flex justify-between"><dt className="font-bold text-ink/60">Total boleta</dt><dd className="font-black">{formatCLP(bill.receiptTotal ?? bill.total)}</dd></div>
-          <div className="flex justify-between"><dt className="font-bold text-ink/60">Total reclamado</dt><dd className="font-black">{formatCLP(dashboard.claimedTotal)}</dd></div>
-          <div className="flex justify-between"><dt className="font-bold text-ink/60">Faltante</dt><dd className="font-black text-tomato">{formatCLP(dashboard.missingClaimAmount)}</dd></div>
-          <div className="flex justify-between"><dt className="font-bold text-ink/60">Pagado</dt><dd className="font-black">{formatCLP(dashboard.paidTotal)}</dd></div>
-          <div className="flex justify-between"><dt className="font-bold text-ink/60">Pendiente de pago</dt><dd className="font-black">{formatCLP(dashboard.pendingTotal)}</dd></div>
+          <div className="flex justify-between"><dt className="font-bold text-ink/60">Consumo</dt><dd className="font-black">{formatCLP(bill.receiptSubtotal ?? bill.subtotal)}</dd></div>
+          <div className="flex justify-between"><dt className="font-bold text-ink/60">Propina</dt><dd className="font-black">{formatCLP(bill.tip)}</dd></div>
+          <div className="flex justify-between"><dt className="font-bold text-ink/60">Total con propina</dt><dd className="font-black">{formatCLP(accountTotal)}</dd></div>
+          <div className="flex justify-between"><dt className="font-bold text-ink/60">Consumo pagado</dt><dd className="font-black">{formatCLP(dashboard.paidTotal)}</dd></div>
         </dl>
       </Card>
 
@@ -61,6 +79,23 @@ export function OrganizerDashboard({ bill }: { bill: Bill }) {
               </div>
             ))
           )}
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="text-lg font-black">Productos cubiertos</h2>
+        <div className="mt-3 divide-y-2 divide-ink/10">
+          {claimedItems.length === 0 ? <p className="py-4 text-sm font-bold text-ink/60">Aún no hay productos cubiertos.</p> : claimedItems.map(({ item, summary }) => (
+            <div className="flex items-center justify-between gap-3 py-3" key={item.id}>
+              <div>
+                <p className="font-black">{item.name}</p>
+                <p className="text-xs font-bold text-ink/55">
+                  Cubierto: {Number(summary.claimedQuantity.toFixed(2))} por {participantNamesForItem(item.id, item.paidByParticipantId)}
+                </p>
+              </div>
+              <p className="font-black">{formatCLP(summary.claimedAmount)}</p>
+            </div>
+          ))}
         </div>
       </Card>
 

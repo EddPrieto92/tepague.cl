@@ -1,0 +1,24 @@
+{
+  "id": "elkika-precuenta-simple",
+  "description": "Precuenta de restaurante clara con cantidad inicial, precios sin signo peso y ruido OCR.",
+  "source": "real-ocr",
+  "rawText": "IS                                                              A\n         ry\nPrecuenta\n2                Restaurante Elkika Ilmenau Ltda\n,             Diego de Velazquez 2109  Providenc\n22-415-2064\nMesa  40 -   1                  9\nFecha : 19/06/26             l\nAtendida por   ENRIQUE MARIFIL\n1 MESTRA NEG GR          4.900\n1 STELLA GR             4.300\n1 STELLA GR               4.300                     u\n1 MESTRA AM GR            4.900\n1 COCA COLA SIN AZUCAR    2.500\n1 CHURRASCO ITALIANO      7.900\n1 VIENESA LUCO            4.000\n1 AGR. MAYO              200\n1 PAPAS FRITAS          5.900\n1 VIENESA ITALIANA        3.900\ni    1 VIENESA ITALIANA        3.900\n1 VIENESA TODO            4.300 f       3\ni       1 CRUDO                10.400                 3\nl       1 STELLA GR              4.300\n$       1 MESTRA AM GR            4.900                 :\n       A       1 COCA COLA SIN AZUCAR    2.500\ni       1 MESTRA NEG GR           4.900\na ie Om, pe. 0 a Th a    es a Sn ove Sy wn oR Me oe  e -\n   Total a pagar :    78.000 W\n     Propina sugerida :        7.800\n                                          es\nBS\ny    l                    2Y $\nDocumento no valido como bole HEEN\ni Exija su boleta                     AEN\nDanke fur Ihren Besuch            RL      -\n:           hE              LA\nGracias por su visita     /",
+  "expected": {
+    "items": [
+      { "name": "MESTRA NEG GR", "quantity": 2, "totalPrice": 9800 },
+      { "name": "STELLA GR", "quantity": 3, "totalPrice": 12900 },
+      { "name": "MESTRA AM GR", "quantity": 2, "totalPrice": 9800 },
+      { "name": "COCA COLA SIN AZUCAR", "quantity": 2, "totalPrice": 5000 },
+      { "name": "CHURRASCO ITALIANO", "quantity": 1, "totalPrice": 7900 },
+      { "name": "VIENESA LUCO", "quantity": 1, "totalPrice": 4000 },
+      { "name": "AGR MAYO", "quantity": 1, "totalPrice": 200 },
+      { "name": "PAPAS FRITAS", "quantity": 1, "totalPrice": 5900 },
+      { "name": "VIENESA ITALIANA", "quantity": 2, "totalPrice": 7800 },
+      { "name": "VIENESA TODO", "quantity": 1, "totalPrice": 4300 },
+      { "name": "CRUDO", "quantity": 1, "totalPrice": 10400 }
+    ],
+    "subtotal": 78000,
+    "tip": 7800,
+    "total": 78000
+  }
+}

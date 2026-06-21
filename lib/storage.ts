@@ -7,6 +7,7 @@ import type { Bill, BillItem, Participant, ParticipantItem, Payment, UserPayment
 
 const BILL_KEY = "mesa-cobrada:bills";
 const PARTICIPANT_KEY = "mesa-cobrada:participant";
+const ORGANIZER_NAME = "Organizador";
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -22,6 +23,57 @@ function slugify(value: string) {
     .slice(0, 32);
 }
 
+export function getOrganizerParticipantId(bill: Pick<Bill, "id">) {
+  return `organizer_${bill.id}`;
+}
+
+export function isOrganizerParticipant(bill: Pick<Bill, "id">, participantId: string) {
+  return participantId === getOrganizerParticipantId(bill);
+}
+
+function ownConsumptionItems(bill: Bill) {
+  const organizerId = getOrganizerParticipantId(bill);
+  return bill.items.filter((item) => item.splitMode === "invited_by" && item.paidByParticipantId === organizerId);
+}
+
+function syncOrganizerConsumption(bill: Bill): Bill {
+  const organizerId = getOrganizerParticipantId(bill);
+  const ownItems = ownConsumptionItems(bill);
+  const existingOrganizer = bill.participants.find((participant) => participant.id === organizerId);
+  const otherParticipants = bill.participants.filter((participant) => participant.id !== organizerId);
+  const organizerName = bill.organizerName?.trim() || existingOrganizer?.name || ORGANIZER_NAME;
+
+  if (ownItems.length === 0) {
+    return {
+      ...bill,
+      participants: existingOrganizer?.adjustments.length ? [{ ...existingOrganizer, name: organizerName, items: [] }, ...otherParticipants] : otherParticipants,
+    };
+  }
+
+  const organizer: Participant = {
+    id: organizerId,
+    billId: bill.id,
+    name: organizerName,
+    totalAmount: existingOrganizer?.totalAmount ?? 0,
+    includeTip: true,
+    status: "paid",
+    paidAt: existingOrganizer?.paidAt ?? new Date().toISOString(),
+    adjustments: existingOrganizer?.adjustments ?? [],
+    items: ownItems.map((item) => {
+      const existingClaim = existingOrganizer?.items.find((claim) => claim.billItemId === item.id);
+      return {
+        id: existingClaim?.id ?? uid("participant_item"),
+        participantId: organizerId,
+        billItemId: item.id,
+        quantity: item.quantity,
+        amount: item.totalPrice,
+      };
+    }),
+  };
+
+  return { ...bill, participants: [organizer, ...otherParticipants] };
+}
+
 export function makeEmptyBill(): Bill {
   const now = new Date().toISOString();
   return {
@@ -29,8 +81,10 @@ export function makeEmptyBill(): Bill {
     id: uid("bill"),
     shareId: `mesa-${Math.random().toString(36).slice(2, 8)}`,
     title: "",
+    organizerName: "",
     imageUrl: "",
     ocrStatus: "empty",
+    ocrRawText: "",
     expectedParticipantCount: 1,
     enteredSubtotal: 0,
     enteredTip: 0,
@@ -86,7 +140,7 @@ export function upsertBill(bill: Bill) {
   const bills = getBills();
   const itemSubtotal = bill.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const subtotal = bill.subtotal || itemSubtotal;
-  const includeTipInTotal = bill.includeTipInTotal !== false;
+  const includeTipInTotal = true;
   const calculatedTotal = calculateBillTotal({
     subtotal,
     tip: bill.tip,
@@ -98,10 +152,11 @@ export function upsertBill(bill: Bill) {
     ...item,
     splitMode: item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit"),
   }));
-  const validation = calculateBillValidation({ ...bill, items: normalizedItems });
+  const normalizedParticipants = bill.participants.map((participant) => ({ ...participant, includeTip: true }));
+  const billWithOrganizer = syncOrganizerConsumption({ ...bill, items: normalizedItems, participants: normalizedParticipants, includeTipInTotal });
+  const validation = calculateBillValidation(billWithOrganizer);
   const nextBill: Bill = {
-    ...bill,
-    items: normalizedItems,
+    ...billWithOrganizer,
     expectedParticipantCount: Math.max(1, bill.expectedParticipantCount || 1),
     subtotal,
     includeTipInTotal,
@@ -122,9 +177,10 @@ export function getBillByShareId(shareId: string) {
 
 export function createBillFromTitle(
   title: string,
+  organizerName = "",
   imageUrl?: string,
   parsedItems: Omit<BillItem, "id" | "billId">[] = [],
-  parsedReceipt?: Pick<ParsedReceipt, "subtotal" | "tip" | "total">,
+  parsedReceipt?: Pick<ParsedReceipt, "subtotal" | "tip" | "total" | "rawText">,
   ocrStatus: Bill["ocrStatus"] = "empty",
 ) {
   const bill = makeEmptyBill();
@@ -142,9 +198,11 @@ export function createBillFromTitle(
   return upsertBill({
     ...bill,
     title,
+    organizerName,
     shareId: `${slugify(title) || "mesa"}-${Math.random().toString(36).slice(2, 6)}`,
     imageUrl,
     ocrStatus,
+    ocrRawText: parsedReceipt?.rawText,
     receiptSubtotal: parsedReceipt?.subtotal || undefined,
     receiptTip: parsedReceipt?.tip || undefined,
     receiptTotal: parsedReceipt?.total || undefined,

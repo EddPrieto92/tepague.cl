@@ -10,28 +10,27 @@ type Props = {
 };
 
 export function BillTotalsEditor({ bill, onChange }: Props) {
-  const includeTipInTotal = bill.includeTipInTotal !== false;
   const calculatedTotal = calculateBillTotal({
     subtotal: bill.subtotal,
     tip: bill.tip,
     serviceFee: bill.serviceFee,
     discount: bill.discount,
-    includeTip: includeTipInTotal,
+    includeTip: true,
   });
   const validation = calculateBillValidation(bill);
   const serviceFee = calculateMesaCobradaServiceFee(bill.expectedParticipantCount || 1);
 
   function update(patch: Partial<Bill>) {
     const nextBill = { ...bill, ...patch };
-    const nextIncludeTip = nextBill.includeTipInTotal !== false;
     onChange({
       ...nextBill,
+      includeTipInTotal: true,
       total: calculateBillTotal({
         subtotal: nextBill.subtotal,
         tip: nextBill.tip,
         serviceFee: nextBill.serviceFee,
         discount: nextBill.discount,
-        includeTip: nextIncludeTip,
+        includeTip: true,
       }),
     });
   }
@@ -60,18 +59,7 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
           />
         </div>
         <div className="col-span-2">
-          <label className="flex min-h-12 items-center justify-between gap-3 rounded-lg border-2 border-ink bg-paper px-3 text-sm font-black">
-            <span>Incluir propina en total</span>
-            <input
-              checked={includeTipInTotal}
-              className="size-5 accent-ink"
-              type="checkbox"
-              onChange={(event) => update({ includeTipInTotal: event.target.checked })}
-            />
-          </label>
-        </div>
-        <div className="col-span-2">
-          <Label>{includeTipInTotal ? "Total con propina" : "Total sin propina"}</Label>
+          <Label>Total con propina</Label>
           <Input readOnly type="number" value={calculatedTotal} />
         </div>
       </div>
@@ -107,7 +95,7 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
       ) : null}
 
       <div className="flex items-center justify-between rounded-lg bg-ink p-4 text-paper">
-        <span className="text-sm font-black uppercase">{includeTipInTotal ? "Total con propina" : "Total sin propina"}</span>
+        <span className="text-sm font-black uppercase">Total con propina</span>
         <span className="text-2xl font-black">{formatCLP(calculatedTotal)}</span>
       </div>
     </Card>

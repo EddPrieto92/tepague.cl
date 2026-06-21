@@ -1,8 +1,10 @@
 "use client";
 
+import { ClipboardPaste } from "lucide-react";
+import { useState } from "react";
 import type { Bill, PaymentMethod } from "@/lib/types";
 import { updatePaymentProfile } from "@/lib/storage";
-import { Card, Input, Label } from "./ui";
+import { Card, Input, Label, SecondaryButton } from "./ui";
 import { BANK_ACCOUNT_TYPES, CHILEAN_BANKS } from "@/lib/payment-profile";
 import type { BankAccountType } from "@/lib/types";
 
@@ -11,7 +13,55 @@ type Props = {
   onChange: (bill: Bill) => void;
 };
 
+function normalize(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function valueAfterLabel(text: string, labels: string[]) {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (const line of lines) {
+    const normalizedLine = normalize(line);
+    const matchingLabel = labels.find((label) => normalizedLine.startsWith(label));
+    if (!matchingLabel) continue;
+    const [, value = ""] = line.split(/[:：-]/, 2);
+    return value.trim();
+  }
+  return "";
+}
+
+function parseBankDetails(text: string) {
+  const normalized = normalize(text);
+  const institutionId = CHILEAN_BANKS.find((bank) => normalized.includes(normalize(bank.name)))?.id ?? "";
+  const accountType = normalized.includes("vista")
+    ? "sight_account"
+    : normalized.includes("corriente")
+      ? "checking_account"
+      : "";
+  const holderId = valueAfterLabel(text, ["rut", "run"]) || text.match(/\b\d{1,2}[.\d]*-?[\dkK]\b/)?.[0] || "";
+  const accountNumber =
+    valueAfterLabel(text, ["numero", "n cuenta", "cuenta", "nro", "no"]) ||
+    text
+      .split(/\r?\n/)
+      .map((line) => line.replace(/[^\d]/g, ""))
+      .find((digits) => digits.length >= 6 && !holderId.replace(/[^\d]/g, "").includes(digits)) ||
+    "";
+  const holderName =
+    valueAfterLabel(text, ["nombre", "titular", "beneficiario"]) ||
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => /[a-zA-ZÁÉÍÓÚÑáéíóúñ]{3}/.test(line) && !normalize(line).includes("banco") && !normalize(line).includes("cuenta")) ||
+    "";
+
+  return { holderName, holderId, institutionId, accountType: accountType as BankAccountType | "", accountNumber };
+}
+
 export function PaymentSetup({ bill, onChange }: Props) {
+  const [pasteError, setPasteError] = useState("");
+
   function update(patch: Partial<Bill>) {
     onChange({ ...bill, ...patch });
   }
@@ -27,6 +77,23 @@ export function PaymentSetup({ bill, onChange }: Props) {
 
   function updateProfile(patch: Partial<typeof profile>) {
     onChange(updatePaymentProfile(bill, { ...profile, ...patch }));
+  }
+
+  async function pasteBankDetails() {
+    setPasteError("");
+    try {
+      const text = await navigator.clipboard.readText();
+      const parsed = parseBankDetails(text);
+      updateProfile({
+        holderName: parsed.holderName || profile.holderName,
+        holderId: parsed.holderId || profile.holderId,
+        institutionId: parsed.institutionId || profile.institutionId,
+        accountType: parsed.accountType || profile.accountType,
+        accountNumber: parsed.accountNumber || profile.accountNumber,
+      });
+    } catch {
+      setPasteError("No pudimos leer el portapapeles. Pega los datos manualmente.");
+    }
   }
 
   return (
@@ -60,6 +127,12 @@ export function PaymentSetup({ bill, onChange }: Props) {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <SecondaryButton className="w-full" onClick={pasteBankDetails} type="button">
+            <ClipboardPaste size={18} /> Pegar datos bancarios
+          </SecondaryButton>
+          {pasteError ? <p className="mt-2 rounded-lg bg-tomato/10 p-2 text-xs font-bold text-tomato">{pasteError}</p> : null}
+        </div>
         <div>
           <Label>Nombre titular</Label>
           <Input value={profile.holderName} onChange={(event) => updateProfile({ holderName: event.target.value })} />

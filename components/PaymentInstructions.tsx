@@ -9,6 +9,7 @@ import { markParticipantPaid, recordPaymentOnBill } from "@/lib/storage";
 import { Button, Card } from "./ui";
 import { QRPaymentBlock } from "./QRPaymentBlock";
 import { trackEvent } from "@/lib/analytics";
+import { persistPublicBill } from "@/lib/public-bills";
 
 export function PaymentInstructions({ bill, participantId }: { bill: Bill; participantId: string }) {
   const router = useRouter();
@@ -19,9 +20,15 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
   const manualFallbackEnabled = process.env.NEXT_PUBLIC_ENABLE_MANUAL_PAID_FALLBACK === "true";
   const [copied, setCopied] = useState(false);
 
-  function paid() {
-    markParticipantPaid(bill, participantId);
-    router.push(`/bill/${bill.shareId}`);
+  async function paid() {
+    setError("");
+    try {
+      const nextBill = markParticipantPaid(bill, participantId);
+      await persistPublicBill(nextBill);
+      router.push(`/bill/${bill.shareId}`);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "No pudimos marcar el pago.");
+    }
   }
 
   async function payWithFintoc() {

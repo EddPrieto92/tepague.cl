@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FunSummaryCard } from "@/components/FunSummaryCard";
 import { OrganizerDashboard } from "@/components/OrganizerDashboard";
 import { ShareBill } from "@/components/ShareBill";
 import { AppShell, Card, TopBar } from "@/components/ui";
@@ -26,7 +25,6 @@ export default function SharePage() {
         <ShareBill bill={bill} />
         <OrganizerDashboard bill={bill} />
         <ReceiptPreview imageUrl={bill.imageUrl} />
-        <FunSummaryCard bill={bill} />
       </div>
     </AppShell>
   );

@@ -37,7 +37,7 @@ export default function ReviewPage() {
       <div className="space-y-4">
         <BillItemEditor bill={bill} onChange={(items) => setBill(updateBillItems(bill, items))} />
         <BillTotalsEditor bill={bill} onChange={(nextBill) => setBill(upsertBill(nextBill))} />
-        <ReceiptPreview imageUrl={bill.imageUrl} />
+        <ReceiptPreview imageUrl={bill.imageUrl} rawText={bill.ocrRawText} />
         {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}
         <Button className="w-full" onClick={async () => {
           setError("");
