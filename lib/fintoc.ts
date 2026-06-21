@@ -25,6 +25,7 @@ export class FintocApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly detail?: string,
   ) {
     super(message);
     this.name = "FintocApiError";
@@ -51,6 +52,10 @@ function fintocSecretKey() {
   return key;
 }
 
+function directPaymentsEnabled() {
+  return process.env.FINTOC_DIRECT_PAYMENTS === "true";
+}
+
 export async function createFintocCheckoutSession(input: CreateCheckoutSessionInput): Promise<FintocCheckoutSession> {
   const secretKey = fintocSecretKey();
 
@@ -61,6 +66,7 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
     return { id, redirect_url: redirectUrl };
   }
 
+  const useDirectPayments = directPaymentsEnabled();
   const response = await fetch("https://api.fintoc.com/v2/checkout_sessions", {
     method: "POST",
     headers: {
@@ -68,15 +74,18 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      amount: input.amount,
       currency: "CLP",
       success_url: `${appUrl()}/pay/success?payment_id=${input.paymentId}`,
       cancel_url: `${appUrl()}/pay/cancel?payment_id=${input.paymentId}&bill_share_id=${input.billShareId}&participant_id=${input.participantId}`,
-      payment_method_types: ["bank_transfer"],
-      payment_method_options: {
-        bank_transfer: {
-          recipient_account: input.recipientAccount,
-        },
-      },
+      payment_method_types: useDirectPayments ? ["bank_transfer"] : undefined,
+      payment_method_options: useDirectPayments
+        ? {
+            bank_transfer: {
+              recipient_account: input.recipientAccount,
+            },
+          }
+        : undefined,
       metadata: {
         bill_id: input.billId,
         participant_id: input.participantId,
@@ -99,13 +108,14 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
   });
 
   if (!response.ok) {
-    await response.body?.cancel();
-    console.error("Fintoc checkout error", { status: response.status });
-    throw new FintocApiError("No se pudo crear la sesion de pago Fintoc.", response.status);
+    const detail = await response.text().catch(() => "");
+    const safeDetail = detail.slice(0, 500);
+    console.error("Fintoc checkout error", { status: response.status, detail: safeDetail });
+    throw new FintocApiError("No se pudo crear la sesion de pago Fintoc.", response.status, safeDetail);
   }
 
   const session = (await response.json()) as FintocCheckoutSession;
-  console.info("Checkout Session creada", { id: session.id });
+  console.info("Checkout Session creada", { id: session.id, mode: useDirectPayments ? "direct_payment" : "hosted_selection" });
   return session;
 }
 

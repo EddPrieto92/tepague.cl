@@ -13,7 +13,7 @@ import { ReceiptPreview } from "@/components/ReceiptPreview";
 
 export default function BillPage() {
   const params = useParams<{ shareId: string }>();
-  const { bill, error, loading } = usePublicBill(params.shareId, 3000);
+  const { bill, error, loading } = usePublicBill(params.shareId, 15000);
   const [participantId, setParticipantId] = useState<string | null>(null);
 
   useEffect(() => {

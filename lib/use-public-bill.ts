@@ -13,7 +13,10 @@ export function usePublicBill(shareId?: string, refreshMs = 0) {
   useEffect(() => {
     if (!shareId) return;
     let active = true;
+    let loadingRequest = false;
     async function load() {
+      if (loadingRequest) return;
+      loadingRequest = true;
       try {
         let nextBill = await fetchPublicBill(shareId as string);
         const cachedBill = getBillByShareId(shareId as string);
@@ -24,6 +27,7 @@ export function usePublicBill(shareId?: string, refreshMs = 0) {
       } catch (loadError) {
         if (active) setError(loadError instanceof Error ? loadError.message : "No pudimos cargar la cuenta.");
       } finally {
+        loadingRequest = false;
         if (active) setLoading(false);
       }
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Bill, ParticipantItem } from "@/lib/types";
 import { calculateItemClaimSummary, calculateParticipantBreakdown, formatCLP } from "@/lib/calculations";
 import { getOrganizerParticipantId, makeParticipantItem, updateParticipantItems } from "@/lib/storage";
@@ -19,6 +19,8 @@ type Props = {
 export function ItemClaimList({ bill, participantId }: Props) {
   const router = useRouter();
   const [currentBill, setCurrentBill] = useState(bill);
+  const currentBillRef = useRef(currentBill);
+  const saveTimerRef = useRef<number | undefined>(undefined);
   const participant = currentBill.participants.find((candidate) => candidate.id === participantId);
   const items = participant?.items ?? [];
   const organizerParticipantId = getOrganizerParticipantId(currentBill);
@@ -27,17 +29,39 @@ export function ItemClaimList({ bill, participantId }: Props) {
   const breakdown = calculateParticipantBreakdown(currentBill, participantId);
   const total = breakdown.total;
 
+  useEffect(() => {
+    currentBillRef.current = currentBill;
+  }, [currentBill]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, []);
+
+  function queueSave(nextBill: Bill, fallbackMessage: string) {
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = undefined;
+      void persistPublicBill(nextBill, participantId).catch((saveError) =>
+        setError(saveError instanceof Error ? saveError.message : fallbackMessage),
+      );
+    }, 800);
+  }
+
   function setItem(itemId: string, quantity: number) {
-    const item = currentBill.items.find((candidate) => candidate.id === itemId);
+    const workingBill = currentBillRef.current;
+    const participantItems = workingBill.participants.find((candidate) => candidate.id === participantId)?.items ?? [];
+    const item = workingBill.items.find((candidate) => candidate.id === itemId);
     if (!item) return;
-    const next = items.filter((candidate) => candidate.billItemId !== itemId);
+    const next = participantItems.filter((candidate) => candidate.billItemId !== itemId);
     if (quantity > 0) {
       next.push(makeParticipantItem(participantId, itemId, item.isShared ? 1 : quantity, item.unitPrice * quantity));
     }
-    const nextBill = updateParticipantItems(currentBill, participantId, next);
+    const nextBill = updateParticipantItems(workingBill, participantId, next);
     setCurrentBill(nextBill);
     trackEvent("participant_claimed_item", { bill_item_id: itemId, quantity });
-    void persistPublicBill(nextBill, participantId).catch((saveError) => setError(saveError instanceof Error ? saveError.message : "No pudimos guardar tu selección."));
+    queueSave(nextBill, "No pudimos guardar tu selección.");
   }
 
   function claimedQuantity(itemId: string) {
@@ -45,12 +69,13 @@ export function ItemClaimList({ bill, participantId }: Props) {
   }
 
   function setInvitedPayer(itemId: string, enabled: boolean) {
+    const workingBill = currentBillRef.current;
     const nextBill = {
-      ...currentBill,
-      items: currentBill.items.map((item) => item.id === itemId ? { ...item, paidByParticipantId: enabled ? participantId : undefined } : item),
+      ...workingBill,
+      items: workingBill.items.map((item) => item.id === itemId ? { ...item, paidByParticipantId: enabled ? participantId : undefined } : item),
     };
     setCurrentBill(nextBill);
-    void persistPublicBill(nextBill, participantId).catch(() => setError("No pudimos guardar quién invita."));
+    queueSave(nextBill, "No pudimos guardar quién invita.");
   }
 
   function remainingStock(itemId: string, quantity: number) {
@@ -63,7 +88,13 @@ export function ItemClaimList({ bill, participantId }: Props) {
 
   async function confirm() {
     setError("");
-    const nextBill = updateParticipantItems(currentBill, participantId, items as ParticipantItem[], true);
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+    }
+    const latestBill = currentBillRef.current;
+    const latestItems = latestBill.participants.find((candidate) => candidate.id === participantId)?.items ?? [];
+    const nextBill = updateParticipantItems(latestBill, participantId, latestItems as ParticipantItem[], true);
     try {
       await persistPublicBill(nextBill, participantId);
       trackEvent("participant_confirmed", { amount: Math.round(total) });

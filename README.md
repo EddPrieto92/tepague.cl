@@ -46,6 +46,7 @@ NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
 FINTOC_SECRET_KEY=
 FINTOC_WEBHOOK_SECRET=
 FINTOC_MOCK_CHECKOUT=true
+FINTOC_DIRECT_PAYMENTS=false
 NEXT_PUBLIC_ENABLE_MANUAL_PAID_FALLBACK=false
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -53,6 +54,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 ```
 
 `FINTOC_MOCK_CHECKOUT=true` permite revisar el flujo local sin credenciales. Para llamar a Fintoc TEST real, carga la credencial desde el gestor de secretos y cambia el mock a `false`.
+
+Con `FINTOC_DIRECT_PAYMENTS=false`, Fintoc muestra el checkout hospedado con selección de método de pago. Activa `FINTOC_DIRECT_PAYMENTS=true` solo cuando la cuenta receptora y el flujo de pago directo estén validados.
 
 Nunca guardes valores de credenciales, prefijos, capturas o URLs de sesión en el repositorio, logs, tickets o notas.
 

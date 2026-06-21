@@ -9,7 +9,7 @@ import { ReceiptPreview } from "@/components/ReceiptPreview";
 
 export default function SharePage() {
   const [shareId, setShareId] = useState("");
-  const { bill, error } = usePublicBill(shareId, 3000);
+  const { bill, error } = usePublicBill(shareId, 15000);
 
   useEffect(() => {
     const shareId = window.sessionStorage.getItem("mesa-cobrada:active-bill") ?? "mesa-viernes";

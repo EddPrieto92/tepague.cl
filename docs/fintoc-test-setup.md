@@ -9,6 +9,7 @@ NEXT_PUBLIC_APP_URL=http://127.0.0.1:3000
 FINTOC_SECRET_KEY=
 FINTOC_WEBHOOK_SECRET=
 FINTOC_MOCK_CHECKOUT=false
+FINTOC_DIRECT_PAYMENTS=false
 NEXT_PUBLIC_ENABLE_MANUAL_PAID_FALLBACK=false
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
@@ -24,6 +25,8 @@ FINTOC_MOCK_CHECKOUT=true
 ```
 
 Mock mode creates a local test redirect to `/pay/success` and marks the payment as succeeded through the status endpoint. It does not call Fintoc.
+
+Keep `FINTOC_DIRECT_PAYMENTS=false` while validating the hosted Fintoc checkout selection. Set it to `true` only when the Direct Payments recipient-account flow is ready.
 
 ## Webhook
 

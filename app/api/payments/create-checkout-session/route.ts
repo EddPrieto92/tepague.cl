@@ -98,6 +98,7 @@ export async function POST(request: Request) {
         {
           error: "fintoc_checkout_error",
           status: error.status,
+          detail: error.detail,
         },
         { status: 502 },
       );
