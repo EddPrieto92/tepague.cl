@@ -88,8 +88,8 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
 
   return (
     <div className="space-y-4">
-      <Card className="bg-ink text-paper">
-        <p className="text-sm font-bold text-paper/70">Total a pagar</p>
+      <Card>
+        <p className="text-sm font-bold text-ink/60">Total a pagar</p>
         <h1 className="mt-2 text-4xl font-black">{formatCLP(summary.totalAmount)}</h1>
       </Card>
 

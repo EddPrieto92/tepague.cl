@@ -11,13 +11,16 @@ export function QuantitySelector({
   max: number;
   onChange: (value: number) => void;
 }) {
+  const canSubtract = value > 0;
+  const canAdd = value < max;
+
   return (
     <div className="flex h-11 items-center rounded-lg border-2 border-ink bg-white">
-      <button className="grid size-10 place-items-center" onClick={() => onChange(Math.max(0, value - 1))} type="button" aria-label="Restar">
+      <button className="grid size-10 place-items-center disabled:opacity-35" disabled={!canSubtract} onClick={() => onChange(Math.max(0, value - 1))} type="button" aria-label="Restar">
         <Minus size={16} />
       </button>
       <span className="w-8 text-center text-sm font-black">{value}</span>
-      <button className="grid size-10 place-items-center" onClick={() => onChange(Math.min(max, value + 1))} type="button" aria-label="Sumar">
+      <button className="grid size-10 place-items-center disabled:opacity-35" disabled={!canAdd} onClick={() => onChange(Math.min(max, value + 1))} type="button" aria-label="Sumar">
         <Plus size={16} />
       </button>
     </div>

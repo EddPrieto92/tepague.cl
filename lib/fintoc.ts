@@ -91,18 +91,6 @@ export async function createFintocCheckoutSession(input: CreateCheckoutSessionIn
         participant_id: input.participantId,
         payment_id: input.paymentId,
       },
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "CLP",
-            unit_amount: input.amount,
-            product_data: {
-              name: input.description,
-            },
-          },
-        },
-      ],
       business_profile: input.receiverName ? { name: input.receiverName } : undefined,
     }),
   });

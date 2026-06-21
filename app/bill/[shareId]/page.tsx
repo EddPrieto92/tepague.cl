@@ -26,8 +26,8 @@ export default function BillPage() {
     <AppShell>
       <TopBar title="Mesa" />
       <div className="space-y-4">
-        <Card className="bg-ink text-paper">
-          <p className="text-sm font-bold text-paper/70">Cuenta abierta</p>
+        <Card>
+          <p className="text-sm font-bold text-ink/60">Cuenta abierta</p>
           <h1 className="mt-2 text-4xl font-black leading-none">{bill.title}</h1>
           <p className="mt-3 text-2xl font-black">{formatCLP(bill.total)}</p>
         </Card>

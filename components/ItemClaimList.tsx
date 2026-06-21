@@ -54,13 +54,21 @@ export function ItemClaimList({ bill, participantId }: Props) {
     const participantItems = workingBill.participants.find((candidate) => candidate.id === participantId)?.items ?? [];
     const item = workingBill.items.find((candidate) => candidate.id === itemId);
     if (!item) return;
+    const claimedByOthers = workingBill.participants
+      .flatMap((candidate) => (candidate.id === participantId ? [] : candidate.items))
+      .filter((claim) => claim.billItemId === itemId)
+      .reduce((sum, claim) => sum + claim.quantity, 0);
+    const maxForParticipant = Math.max(0, item.quantity - claimedByOthers);
+    const safeQuantity = Math.min(maxForParticipant, Math.max(0, Math.floor(quantity)));
     const next = participantItems.filter((candidate) => candidate.billItemId !== itemId);
-    if (quantity > 0) {
-      next.push(makeParticipantItem(participantId, itemId, item.isShared ? 1 : quantity, item.unitPrice * quantity));
+    if (safeQuantity > 0) {
+      const claimQuantity = item.isShared ? 1 : safeQuantity;
+      next.push(makeParticipantItem(participantId, itemId, claimQuantity, item.unitPrice * claimQuantity));
     }
     const nextBill = updateParticipantItems(workingBill, participantId, next);
+    currentBillRef.current = nextBill;
     setCurrentBill(nextBill);
-    trackEvent("participant_claimed_item", { bill_item_id: itemId, quantity });
+    trackEvent("participant_claimed_item", { bill_item_id: itemId, quantity: safeQuantity });
     queueSave(nextBill, "No pudimos guardar tu selección.");
   }
 
@@ -74,6 +82,7 @@ export function ItemClaimList({ bill, participantId }: Props) {
       ...workingBill,
       items: workingBill.items.map((item) => item.id === itemId ? { ...item, paidByParticipantId: enabled ? participantId : undefined } : item),
     };
+    currentBillRef.current = nextBill;
     setCurrentBill(nextBill);
     queueSave(nextBill, "No pudimos guardar quién invita.");
   }
@@ -118,7 +127,7 @@ export function ItemClaimList({ bill, participantId }: Props) {
 
       {currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded" && item.paidByParticipantId !== organizerParticipantId).map((item) => {
         const value = claimedQuantity(item.id);
-        const max = remainingStock(item.id, item.quantity) + value;
+        const max = Math.max(0, remainingStock(item.id, item.quantity) + value);
         const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
         const availability = calculateItemClaimSummary(currentBill, item);
         return (
