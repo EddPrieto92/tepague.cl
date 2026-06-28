@@ -23,18 +23,11 @@ export function OrganizerDashboard({ bill }: { bill: Bill }) {
     expired: "Expiró",
   } as const;
 
-  function participantNamesForItem(itemId: string, paidByParticipantId?: string) {
-    const item = bill.items.find((candidate) => candidate.id === itemId);
-    if (item?.splitMode === "split_all") return "Dividido entre todos";
-
-    if (paidByParticipantId) {
-      return bill.participants.find((participant) => participant.id === paidByParticipantId)?.name ?? "Asignado";
-    }
-
+  function participantNamesForItem(itemId: string) {
     const names = bill.participants
       .filter((participant) => participant.items.some((claim) => claim.billItemId === itemId))
       .map((participant) => participant.name);
-    return names.length ? names.join(", ") : "Sin asignar";
+    return names.length ? names.join(", ") : "Sin reclamar";
   }
 
   return (
@@ -124,7 +117,7 @@ export function OrganizerDashboard({ bill }: { bill: Bill }) {
                 <div>
                   <p className="font-black">{item.name}</p>
                   <p className="text-xs font-bold text-ink/55">
-                    Cubierto: {Number(summary.claimedQuantity.toFixed(2))} por {participantNamesForItem(item.id, item.paidByParticipantId)}
+                    Reclamado: {Number(summary.claimedQuantity.toFixed(2))} por {participantNamesForItem(item.id)}
                   </p>
                 </div>
                 <p className="font-black">{formatCLP(summary.claimedAmount)}</p>

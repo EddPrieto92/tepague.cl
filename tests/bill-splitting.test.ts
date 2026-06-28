@@ -19,11 +19,31 @@ describe("real bill splitting scenarios", () => {
     expect(calculateParticipantBreakdown(bill, "p1").consumption).toBe(2300);
   });
 
-  it("C: splits a shared dish among claimants", () => {
-    const products = [item("papas", { totalPrice: 8000, unitPrice: 8000, splitMode: "shared_by_claimants", isShared: true })];
-    const people = [1, 2, 3, 4].map((id) => participant(`p${id}`, [{ id: `c${id}`, participantId: `p${id}`, billItemId: "papas", quantity: 1, amount: 8000 }]));
+  it("C: splits a shared dish by the organizer-defined count", () => {
+    const products = [item("papas", { totalPrice: 9000, unitPrice: 9000, splitMode: "shared_by_claimants", isShared: true, sharedCount: 3, sharedPrice: 3000 })];
+    const people = [1, 2, 3].map((id) => participant(`p${id}`, [{ id: `c${id}`, participantId: `p${id}`, billItemId: "papas", quantity: 1, amount: 3000 }]));
     const bill = billFixture(products, people);
-    expect(calculateParticipantBreakdown(bill, "p1").consumption).toBe(2000);
+    expect(calculateParticipantBreakdown(bill, "p1").consumption).toBe(3000);
+  });
+
+  it("C2: keeps a fixed shared amount and exposes missing claimants", () => {
+    const products = [item("pizza", { totalPrice: 15000, unitPrice: 15000, splitMode: "shared_by_claimants", isShared: true, sharedCount: 3, sharedPrice: 5000 })];
+    const people = [1, 2].map((id) => participant(`p${id}`, [{ id: `c${id}`, participantId: `p${id}`, billItemId: "pizza", quantity: 1, amount: 5000 }]));
+    const bill = billFixture(products, people, 3);
+    const dashboard = calculateDashboard(bill);
+
+    expect(calculateParticipantBreakdown(bill, "p1").consumption).toBe(5000);
+    expect(dashboard.missingItems[0]).toMatchObject({ remainingQuantity: 1, remainingAmount: 5000 });
+    expect(dashboard.claimedTotal).toBe(10000);
+  });
+
+  it("C3: closes a fixed shared item when all shares are claimed", () => {
+    const products = [item("pizza", { totalPrice: 15000, unitPrice: 15000, splitMode: "shared_by_claimants", isShared: true, sharedCount: 3, sharedPrice: 5000 })];
+    const people = [1, 2, 3].map((id) => participant(`p${id}`, [{ id: `c${id}`, participantId: `p${id}`, billItemId: "pizza", quantity: 1, amount: 5000 }]));
+    const bill = billFixture(products, people, 3);
+
+    expect(calculateDashboard(bill).missingClaimAmount).toBe(0);
+    expect(people.reduce((sum, person) => sum + calculateParticipantBreakdown(bill, person.id).consumption, 0)).toBe(15000);
   });
 
   it("D: charges an invited product only to the selected payer", () => {

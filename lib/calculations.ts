@@ -26,8 +26,10 @@ export function calculateBillTotal(input: {
 }
 
 export function calculateSharedItemSplit(item: BillItem, participantCount: number) {
-  if ((item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit")) !== "shared_by_claimants" || participantCount <= 0) return 0;
-  return item.totalPrice / participantCount;
+  if ((item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit")) !== "shared_by_claimants") return 0;
+  const fixedCount = item.sharedCount && item.sharedCount >= 2 ? item.sharedCount : participantCount;
+  if (fixedCount <= 0) return 0;
+  return item.sharedPrice && item.sharedPrice > 0 ? item.sharedPrice : item.totalPrice / fixedCount;
 }
 
 export function effectiveParticipantCount(bill: Bill) {
@@ -79,8 +81,20 @@ export function calculateItemClaimSummary(bill: Bill, item: BillItem): ItemClaim
   }
 
   if (splitMode === "shared_by_claimants") {
-    claimedQuantity = claims.length > 0 ? item.quantity : 0;
-    claimedAmount = claims.length > 0 ? item.totalPrice : 0;
+    const sharedCount = item.sharedCount && item.sharedCount >= 2 ? item.sharedCount : Math.max(1, claims.length);
+    const sharedPrice = calculateSharedItemSplit(item, sharedCount);
+    claimedQuantity = Math.min(sharedCount, claims.length);
+    claimedAmount = Math.min(item.totalPrice, claimedQuantity * sharedPrice);
+    const remainingQuantity = Math.max(0, sharedCount - claimedQuantity);
+    const remainingAmount = Math.max(0, item.totalPrice - claimedAmount);
+    const claimStatus = claims.length > sharedCount
+      ? "overclaimed"
+      : remainingAmount <= 0
+        ? "complete"
+        : claimedAmount > 0
+          ? "partial"
+          : "unclaimed";
+    return { itemId: item.id, name: item.name, claimedQuantity, remainingQuantity, claimedAmount, remainingAmount, claimStatus };
   }
   if (splitMode === "split_all") {
     claimedQuantity = Math.min(item.quantity, (bill.participants.length / effectiveParticipantCount(bill)) * item.quantity);
@@ -143,7 +157,7 @@ export function calculateParticipantFinalAmount(
     const item = bill.items.find((candidate) => candidate.id === participantItem.billItemId);
     if (!item) return sum;
     if (item.isShared) {
-      return sum + calculateSharedItemSplit(item, participantCountForSharedItems[item.id] ?? 0);
+      return sum + calculateSharedItemSplit(item, participantCountForSharedItems[item.id] ?? item.sharedCount ?? 0);
     }
     return sum + item.unitPrice * participantItem.quantity;
   }, 0);
@@ -162,10 +176,8 @@ export function calculateParticipantTotals(bill: Bill) {
 }
 
 export function calculateMesaCobradaServiceFee(participantCount: number) {
-  if (participantCount <= 5) return 0;
-  if (participantCount <= 10) return 990;
-  if (participantCount <= 20) return 1990;
-  return 2990;
+  void participantCount;
+  return 0;
 }
 
 export function calculatePaymentSummary(bill: Bill, participantId: string) {

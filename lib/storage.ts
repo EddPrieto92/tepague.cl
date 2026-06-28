@@ -74,6 +74,33 @@ function syncOrganizerConsumption(bill: Bill): Bill {
   return { ...bill, participants: [organizer, ...otherParticipants] };
 }
 
+function normalizeItemForBill(item: BillItem, bill: Pick<Bill, "expectedParticipantCount" | "participants">): BillItem {
+  const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
+  const totalPrice = item.quantity * item.unitPrice;
+
+  if (splitMode !== "shared_by_claimants") {
+    const { sharedCount: _sharedCount, sharedPrice: _sharedPrice, ...rest } = item;
+    return {
+      ...rest,
+      totalPrice,
+      splitMode: splitMode === "excluded" ? "excluded" : "unit",
+      isShared: false,
+      paidByParticipantId: undefined,
+    };
+  }
+
+  const participantCeiling = Math.max(2, bill.expectedParticipantCount || 0, bill.participants.length, item.sharedCount || 0);
+  const sharedCount = Math.max(2, Math.min(participantCeiling, Math.floor(item.sharedCount || 2)));
+  return {
+    ...item,
+    totalPrice,
+    splitMode,
+    isShared: true,
+    sharedCount,
+    sharedPrice: totalPrice / sharedCount,
+  };
+}
+
 export function makeEmptyBill(): Bill {
   const now = new Date().toISOString();
   return {
@@ -141,24 +168,28 @@ export function upsertBill(bill: Bill) {
   const itemSubtotal = bill.items.reduce((sum, item) => sum + item.totalPrice, 0);
   const subtotal = bill.subtotal || itemSubtotal;
   const includeTipInTotal = true;
+  const serviceFee = 0;
   const calculatedTotal = calculateBillTotal({
     subtotal,
     tip: bill.tip,
-    serviceFee: bill.serviceFee,
+    serviceFee,
     discount: bill.discount,
     includeTip: includeTipInTotal,
   });
-  const normalizedItems = bill.items.map((item) => ({
-    ...item,
-    splitMode: item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit"),
-  }));
+  const normalizedItems = bill.items.map((item) => normalizeItemForBill(item, bill));
+  const expectedParticipantCount = Math.max(
+    1,
+    bill.expectedParticipantCount || 1,
+    ...normalizedItems.map((item) => item.sharedCount ?? 1),
+  );
   const normalizedParticipants = bill.participants.map((participant) => ({ ...participant, includeTip: true }));
   const billWithOrganizer = syncOrganizerConsumption({ ...bill, items: normalizedItems, participants: normalizedParticipants, includeTipInTotal });
   const validation = calculateBillValidation(billWithOrganizer);
   const nextBill: Bill = {
     ...billWithOrganizer,
-    expectedParticipantCount: Math.max(1, bill.expectedParticipantCount || 1),
+    expectedParticipantCount,
     subtotal,
+    serviceFee,
     includeTipInTotal,
     total: calculatedTotal || bill.total,
     shareId: bill.shareId || slugify(bill.title) || uid("mesa"),

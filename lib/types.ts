@@ -45,6 +45,8 @@ export type BillItem = {
   unitPrice: number;
   totalPrice: number;
   isShared: boolean;
+  sharedCount?: number;
+  sharedPrice?: number;
   splitMode: SplitMode;
   paidByParticipantId?: string;
 };

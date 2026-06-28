@@ -22,7 +22,7 @@ export default function JoinPage() {
   useEffect(() => {
     if (!bill || !participantId) return;
     const participant = bill.participants.find((candidate) => candidate.id === participantId);
-    if (participant && participant.status !== "selecting") router.replace(`/bill/${bill.shareId}/pay/${participantId}`);
+    if (participant?.status === "paid") router.replace(`/bill/${bill.shareId}/pay/${participantId}`);
   }, [bill, participantId, router]);
 
   if (!bill) return <AppShell><TopBar title="Participante" href={`/bill/${params.shareId}`} /><Card className="text-sm font-bold">{error || (loading ? "Cargando cuenta…" : "Cuenta no disponible.")}</Card></AppShell>;

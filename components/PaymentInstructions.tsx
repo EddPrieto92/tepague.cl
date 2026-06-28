@@ -6,7 +6,7 @@ import { useState } from "react";
 import type { Bill } from "@/lib/types";
 import { calculatePaymentSummary, formatCLP } from "@/lib/calculations";
 import { markParticipantPaid, recordPaymentOnBill } from "@/lib/storage";
-import { Button, Card } from "./ui";
+import { Button, Card, SecondaryButton } from "./ui";
 import { QRPaymentBlock } from "./QRPaymentBlock";
 import { trackEvent } from "@/lib/analytics";
 import { persistPublicBill } from "@/lib/public-bills";
@@ -84,6 +84,10 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
     setCopied(true);
   }
 
+  function editProducts() {
+    router.push(`/bill/${bill.shareId}/join?participantId=${participantId}`);
+  }
+
   if (!participant) return null;
 
   return (
@@ -113,6 +117,11 @@ export function PaymentInstructions({ bill, participantId }: { bill: Bill; parti
             <dd className="font-black">{formatCLP(summary.totalAmount)}</dd>
           </div>
         </dl>
+        {participant.status !== "paid" ? (
+          <SecondaryButton className="mt-4 w-full" onClick={editProducts} type="button">
+            Editar productos
+          </SecondaryButton>
+        ) : null}
       </Card>
 
       {error ? <p className="rounded-lg bg-tomato/10 p-3 text-sm font-bold text-tomato">{error}</p> : null}

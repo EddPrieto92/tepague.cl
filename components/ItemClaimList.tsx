@@ -3,12 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Bill, ParticipantItem } from "@/lib/types";
-import { calculateItemClaimSummary, calculateParticipantBreakdown, formatCLP } from "@/lib/calculations";
-import { getOrganizerParticipantId, makeParticipantItem, updateParticipantItems } from "@/lib/storage";
+import { calculateItemClaimSummary, calculateParticipantBreakdown, calculateSharedItemSplit, formatCLP } from "@/lib/calculations";
+import { makeParticipantItem, updateParticipantItems } from "@/lib/storage";
 import { persistPublicBill } from "@/lib/public-bills";
 import { trackEvent } from "@/lib/analytics";
 import { Button, Card, SecondaryButton } from "./ui";
-import { QuantitySelector } from "./QuantitySelector";
 import { SharedItemToggle } from "./SharedItemToggle";
 
 type Props = {
@@ -23,14 +22,13 @@ export function ItemClaimList({ bill, participantId }: Props) {
   const saveTimerRef = useRef<number | undefined>(undefined);
   const participant = currentBill.participants.find((candidate) => candidate.id === participantId);
   const items = participant?.items ?? [];
-  const organizerParticipantId = getOrganizerParticipantId(currentBill);
   const [error, setError] = useState("");
 
   const breakdown = calculateParticipantBreakdown(currentBill, participantId);
   const total = breakdown.total;
   const consumptionTotal = Math.round(breakdown.consumption + breakdown.adjustments);
   const tipTotal = Math.round(breakdown.tip);
-  const claimableItems = currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded" && item.paidByParticipantId !== organizerParticipantId);
+  const claimableItems = currentBill.items.filter((item) => (item.splitMode ?? "unit") !== "excluded");
 
   useEffect(() => {
     currentBillRef.current = currentBill;
@@ -52,50 +50,44 @@ export function ItemClaimList({ bill, participantId }: Props) {
     }, 800);
   }
 
-  function setItem(itemId: string, quantity: number) {
-    const workingBill = currentBillRef.current;
-    const participantItems = workingBill.participants.find((candidate) => candidate.id === participantId)?.items ?? [];
-    const item = workingBill.items.find((candidate) => candidate.id === itemId);
-    if (!item) return;
-    const claimedByOthers = workingBill.participants
-      .flatMap((candidate) => (candidate.id === participantId ? [] : candidate.items))
-      .filter((claim) => claim.billItemId === itemId)
-      .reduce((sum, claim) => sum + claim.quantity, 0);
-    const maxForParticipant = Math.max(0, item.quantity - claimedByOthers);
-    const safeQuantity = Math.min(maxForParticipant, Math.max(0, Math.floor(quantity)));
-    const next = participantItems.filter((candidate) => candidate.billItemId !== itemId);
-    if (safeQuantity > 0) {
-      const claimQuantity = item.isShared ? 1 : safeQuantity;
-      next.push(makeParticipantItem(participantId, itemId, claimQuantity, item.unitPrice * claimQuantity));
-    }
-    const nextBill = updateParticipantItems(workingBill, participantId, next);
-    currentBillRef.current = nextBill;
-    setCurrentBill(nextBill);
-    trackEvent("participant_claimed_item", { bill_item_id: itemId, quantity: safeQuantity });
-    queueSave(nextBill, "No pudimos guardar tu selección.");
-  }
-
   function claimedQuantity(itemId: string) {
     return items.find((item) => item.billItemId === itemId)?.quantity ?? 0;
   }
 
-  function setInvitedPayer(itemId: string, enabled: boolean) {
-    const workingBill = currentBillRef.current;
-    const nextBill = {
-      ...workingBill,
-      items: workingBill.items.map((item) => item.id === itemId ? { ...item, paidByParticipantId: enabled ? participantId : undefined } : item),
-    };
-    currentBillRef.current = nextBill;
-    setCurrentBill(nextBill);
-    queueSave(nextBill, "No pudimos guardar quién invita.");
-  }
-
-  function remainingStock(itemId: string, quantity: number) {
+  function remainingStock(itemId: string) {
+    const item = currentBill.items.find((candidate) => candidate.id === itemId);
+    const splitMode = item?.splitMode ?? (item?.isShared ? "shared_by_claimants" : "unit");
+    const maxClaims = splitMode === "shared_by_claimants" ? item?.sharedCount ?? 0 : 1;
     const claimedByOthers = currentBill.participants
       .flatMap((candidate) => (candidate.id === participantId ? [] : candidate.items))
-      .filter((item) => item.billItemId === itemId)
-      .reduce((sum, item) => sum + item.quantity, 0);
-    return Math.max(0, quantity - claimedByOthers);
+      .filter((claim) => claim.billItemId === itemId)
+      .reduce((sum, claim) => sum + claim.quantity, 0);
+    return Math.max(0, maxClaims - claimedByOthers);
+  }
+
+  function setItem(itemId: string, checked: boolean) {
+    const workingBill = currentBillRef.current;
+    const participantItems = workingBill.participants.find((candidate) => candidate.id === participantId)?.items ?? [];
+    const item = workingBill.items.find((candidate) => candidate.id === itemId);
+    if (!item) return;
+
+    const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
+    const next = participantItems.filter((candidate) => candidate.billItemId !== itemId);
+
+    if (checked) {
+      const available = remainingStock(itemId);
+      if (available <= 0) return;
+      const isShared = splitMode === "shared_by_claimants";
+      const claimQuantity = isShared ? 1 : item.quantity;
+      const amount = isShared ? calculateSharedItemSplit(item, item.sharedCount ?? 0) : item.totalPrice;
+      next.push(makeParticipantItem(participantId, itemId, claimQuantity, amount));
+    }
+
+    const nextBill = updateParticipantItems(workingBill, participantId, next);
+    currentBillRef.current = nextBill;
+    setCurrentBill(nextBill);
+    trackEvent("participant_claimed_item", { bill_item_id: itemId, checked });
+    queueSave(nextBill, "No pudimos guardar tu seleccion.");
   }
 
   async function confirm() {
@@ -112,7 +104,7 @@ export function ItemClaimList({ bill, participantId }: Props) {
       trackEvent("participant_confirmed", { amount: Math.round(total) });
       router.push(`/bill/${nextBill.shareId}/pay/${participantId}`);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "No pudimos confirmar tu selección.");
+      setError(saveError instanceof Error ? saveError.message : "No pudimos confirmar tu seleccion.");
     }
   }
 
@@ -143,37 +135,54 @@ export function ItemClaimList({ bill, participantId }: Props) {
       <div className="flex-1 space-y-4 overflow-y-auto pb-40">
         {claimableItems.map((item) => {
           const value = claimedQuantity(item.id);
-          const max = Math.max(0, remainingStock(item.id, item.quantity) + value);
           const splitMode = item.splitMode ?? (item.isShared ? "shared_by_claimants" : "unit");
+          const isShared = splitMode === "shared_by_claimants";
           const availability = calculateItemClaimSummary(currentBill, item);
+          const sharedCount = item.sharedCount ?? 0;
+          const sharedPrice = calculateSharedItemSplit(item, sharedCount);
+          const checked = value > 0;
+          const available = remainingStock(item.id);
+          const remainingParts = Math.max(0, Math.round(availability.remainingQuantity));
+
           return (
             <Card key={item.id}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black">{item.name}</h2>
-                  <p className="text-sm font-bold text-ink/60">{formatCLP(item.unitPrice)} c/u</p>
+                  {isShared ? (
+                    <p className="text-sm font-bold text-ink/60">
+                      Total producto {formatCLP(item.totalPrice)} · {sharedCount || "?"} partes · Tu parte {formatCLP(sharedPrice)}
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-ink/60">Total producto {formatCLP(item.totalPrice)}</p>
+                  )}
                 </div>
-                <span className="rounded-full bg-paper px-3 py-1 text-xs font-black">Disponible: {Math.max(0, Math.round(availability.remainingQuantity + value))}</span>
+                <span className="rounded-full bg-paper px-3 py-1 text-xs font-black">
+                  {isShared
+                    ? `${Math.round(availability.claimedQuantity)} de ${sharedCount || "?"} partes`
+                    : checked ? "Reclamado" : "Disponible"}
+                </span>
               </div>
-              <p className="mt-2 text-xs font-bold text-ink/55">Ya reclamaste: {value}</p>
+              {isShared ? (
+                <p className="mt-2 text-xs font-bold text-ink/55">
+                  Falta {remainingParts} {remainingParts === 1 ? "parte" : "partes"}
+                </p>
+              ) : null}
               <div className="mt-3">
-                {splitMode === "shared_by_claimants" ? (
-                  <SharedItemToggle checked={value > 0} onChange={(checked) => setItem(item.id, checked ? 1 : 0)} />
-                ) : splitMode === "split_all" ? (
-                  <p className="rounded-lg bg-limewash p-3 text-sm font-black">Se divide automáticamente entre todos.</p>
-                ) : splitMode === "invited_by" ? (
-                  item.paidByParticipantId && item.paidByParticipantId !== participantId
-                    ? <p className="rounded-lg bg-paper p-3 text-sm font-black">Este producto lo paga otra persona.</p>
-                    : <SharedItemToggle checked={item.paidByParticipantId === participantId} onChange={(checked) => setInvitedPayer(item.id, checked)} label="Yo invito este producto" />
-                ) : (
-                  <QuantitySelector value={value} max={max} onChange={(next) => setItem(item.id, next)} />
-                )}
+                <SharedItemToggle
+                  checked={checked}
+                  onChange={(nextChecked) => setItem(item.id, nextChecked)}
+                  label="Yo consumi este producto"
+                />
+                {available <= 0 && !checked ? (
+                  <p className="mt-2 rounded-lg bg-paper p-2 text-xs font-black text-ink/60">No quedan partes disponibles.</p>
+                ) : null}
               </div>
             </Card>
           );
         })}
 
-        {items.length === 0 && total <= 0 ? <p className="rounded-lg bg-paper p-3 text-sm font-bold">Aún no has seleccionado productos. Selecciona lo que consumiste para calcular tu deuda.</p> : null}
+        {items.length === 0 && total <= 0 ? <p className="rounded-lg bg-paper p-3 text-sm font-bold">Aun no has seleccionado productos. Selecciona lo que consumiste para calcular tu deuda.</p> : null}
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink/10 bg-paper/95 px-4 py-3 backdrop-blur">

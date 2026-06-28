@@ -1,7 +1,7 @@
 "use client";
 
 import type { Bill } from "@/lib/types";
-import { calculateBillTotal, calculateBillValidation, calculateMesaCobradaServiceFee, formatCLP } from "@/lib/calculations";
+import { calculateBillTotal, calculateBillValidation, formatCLP } from "@/lib/calculations";
 import { Card, Input, Label } from "./ui";
 
 type Props = {
@@ -13,22 +13,22 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
   const calculatedTotal = calculateBillTotal({
     subtotal: bill.subtotal,
     tip: bill.tip,
-    serviceFee: bill.serviceFee,
+    serviceFee: 0,
     discount: bill.discount,
     includeTip: true,
   });
   const validation = calculateBillValidation(bill);
-  const serviceFee = calculateMesaCobradaServiceFee(bill.expectedParticipantCount || 1);
 
   function update(patch: Partial<Bill>) {
     const nextBill = { ...bill, ...patch };
     onChange({
       ...nextBill,
+      serviceFee: 0,
       includeTipInTotal: true,
       total: calculateBillTotal({
         subtotal: nextBill.subtotal,
         tip: nextBill.tip,
-        serviceFee: nextBill.serviceFee,
+        serviceFee: 0,
         discount: nextBill.discount,
         includeTip: true,
       }),
@@ -49,14 +49,6 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
         <div>
           <Label>Descuento</Label>
           <Input type="number" value={bill.discount} onChange={(event) => update({ discount: Number(event.target.value) || 0 })} />
-        </div>
-        <div>
-          <Label>Servicio</Label>
-          <Input
-            type="number"
-            value={bill.serviceFee}
-            onChange={(event) => update({ serviceFee: Number(event.target.value) || 0 })}
-          />
         </div>
         <div className="col-span-2">
           <Label>Total con propina</Label>
@@ -81,10 +73,6 @@ export function BillTotalsEditor({ bill, onChange }: Props) {
         <div className="mt-2 flex justify-between gap-3">
           <span>Propina</span>
           <span className="text-right font-black text-ink">{formatCLP(bill.tip)}</span>
-        </div>
-        <div className="mt-2 flex justify-between gap-3">
-          <span>Servicio estimado</span>
-          <span className="text-right font-black text-ink">{formatCLP(serviceFee)}</span>
         </div>
       </div>
 

@@ -17,12 +17,6 @@ export async function POST(request: Request) {
         const exists = current.participants.some((candidate) => candidate.id === participantId);
         nextBill = {
           ...current,
-          items: current.items.map((currentItem) => {
-            const incomingItem = bill.items.find((candidate) => candidate.id === currentItem.id);
-            if (!incomingItem) return currentItem;
-            const participantControlsInvitation = incomingItem.paidByParticipantId === participantId || currentItem.paidByParticipantId === participantId;
-            return participantControlsInvitation ? { ...currentItem, paidByParticipantId: incomingItem.paidByParticipantId } : currentItem;
-          }),
           participants: exists
             ? current.participants.map((candidate) => candidate.id === participantId ? participant : candidate)
             : [...current.participants, participant],
